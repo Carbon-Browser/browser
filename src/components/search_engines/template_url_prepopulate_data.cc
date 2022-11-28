@@ -1490,7 +1490,7 @@ std::vector<std::unique_ptr<TemplateURLData>> GetPrepopulatedEngines(
   if (default_search_provider_index) {
     const auto itr = std::find_if(
         t_urls.begin(), t_urls.end(),
-        [](const auto& t_url) { return t_url->prepopulate_id == 10; });
+        [](const auto& t_url) { return t_url->prepopulate_id == google.id; });
     *default_search_provider_index =
         itr == t_urls.end() ? 0 : std::distance(t_urls.begin(), itr);
   }

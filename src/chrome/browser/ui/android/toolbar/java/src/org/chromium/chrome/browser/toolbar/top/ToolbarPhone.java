@@ -880,11 +880,13 @@ public class ToolbarPhone extends ToolbarLayout implements OnClickListener, TabC
         // - The right most visible location bar child view.
         // - The bottom of the viewport is aligned with the bottom of the location bar.
         // Additional padding can be applied for use during animations.
-        out.set(leftViewPosition,
-                mLocationBar.getPhoneCoordinator().getTop() + mLocationBarBackgroundVerticalInset,
-                rightViewPosition,
-                mLocationBar.getPhoneCoordinator().getBottom()
-                        - mLocationBarBackgroundVerticalInset);
+        try {
+          out.set(leftViewPosition,
+                  mLocationBar.getPhoneCoordinator().getTop() + mLocationBarBackgroundVerticalInset,
+                  rightViewPosition,
+                  mLocationBar.getPhoneCoordinator().getBottom()
+                          - mLocationBarBackgroundVerticalInset);
+        } catch (Exception ignore) {}
     }
 
     /**

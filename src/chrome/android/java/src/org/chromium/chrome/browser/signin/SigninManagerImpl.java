@@ -187,7 +187,7 @@ class SigninManagerImpl implements IdentityManager.Observer, SigninManager {
      */
     @Override
     public boolean isSigninDisabledByPolicy() {
-        return !mSigninAllowedByPolicy;
+        return true;
     }
 
     /**

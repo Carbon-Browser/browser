@@ -35,9 +35,7 @@ public class RewardsAPIBridge {
     }
 
     private static final String API_BASE_URL =
-    private static final String API_ACCESS_KEY =
-    // private static final String API_BASE_URL =
-    // private static final String API_ACCESS_KEY =
+    private static final String API_ACCESS_KEY = 
 
     public boolean isLoggedIn = false;
     public int balance = 0;

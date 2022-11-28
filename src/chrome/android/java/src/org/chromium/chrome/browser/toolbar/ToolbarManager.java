@@ -1556,7 +1556,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         LinearLayout mLoadingIndicatorContainer = contentView.findViewById(R.id.reward_loading_container);
         ImageView mLoadingIndicator = contentView.findViewById(R.id.reward_loading);
         Glide.with(contentView.getContext())
-            .load("https://trycarbon.io/android-resources/images/rewards_loading.gif")
+            .load("https://sigmawolf.io/android-resources/images/rewards_loading.gif")
             .thumbnail(0.05f)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
             .into(new DrawableImageViewTarget(mLoadingIndicator));

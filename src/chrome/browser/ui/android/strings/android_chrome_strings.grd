@@ -5658,6 +5658,13 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
 
 
       <!-- SFB STRINGS -->
+      <message name="IDS_JOIN_TELEGRAM" desc="">
+        Join Carbon Telegram
+      </message>
+      <message name="IDS_FOLLOW_TWITTER" desc="">
+        Follow Carbon on Twitter
+      </message>
+
       <message name="IDS_SET_DEFAULT" desc="">
         Set Carbon Browser as default so that every link you tap opens Carbon's fast privacy browser protection
       </message>

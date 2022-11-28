@@ -214,7 +214,9 @@ public class CustomTabAppMenuPropertiesDelegate extends AppMenuPropertiesDelegat
                 mItemIdToIndexMap.put(item.getItemId(), i);
             }
 
-            menu.findItem(R.id.help_id).setVisible(false);
+            try {
+                menu.findItem(R.id.help_id).setVisible(false);
+            } catch (Exception ignore) {}
 
             updateRequestDesktopSiteMenuItem(
                     menu, currentTab, requestDesktopSiteVisible, isChromeScheme);

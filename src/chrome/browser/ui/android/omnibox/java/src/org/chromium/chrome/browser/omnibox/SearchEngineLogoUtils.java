@@ -163,6 +163,8 @@ public class SearchEngineLogoUtils {
         // If TemplateUrlService is available and the default search engine is Google,
         // then we serve the Google icon we have locally.
         // Otherwise, the search engine is non-Google and we go to the network to fetch it.
+        if (callback == null) return;
+
         if (profile == null || templateUrlService == null || needToCheckForSearchEnginePromo()) {
             callback.onResult(getSearchLoupeResource(brandedColorScheme));
             return;
@@ -271,6 +273,8 @@ public class SearchEngineLogoUtils {
         // Cache the result icon to reduce future work.
         sCachedComposedBackground = composedIcon;
         sCachedComposedBackgroundLogoUrl = logoUrl;
+
+        if (callback == null) return;
 
         callback.onResult(new StatusIconResource(logoUrl, sCachedComposedBackground, 0));
     }

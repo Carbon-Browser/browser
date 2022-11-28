@@ -2573,6 +2573,18 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
             return true;
         }
 
+        if (id == R.id.join_telegram) {
+          LoadUrlParams loadParams = new LoadUrlParams("https://t.me/trycarbonio");
+          currentTab.loadUrl(loadParams);
+          return true;
+        }
+
+        if (id == R.id.follow_twitter) {
+          LoadUrlParams loadParams = new LoadUrlParams("https://twitter.com/trycarbonio");
+          currentTab.loadUrl(loadParams);
+          return true;
+        }
+
         if (id == R.id.auto_dark_web_contents_id || id == R.id.auto_dark_web_contents_check_id) {
             // Get values needed to check/enable auto dark for the current site.
             Profile profile = getCurrentTabModel().getProfile();

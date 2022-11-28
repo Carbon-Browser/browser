@@ -459,7 +459,7 @@ public class ToSAndUMAFirstRunFragment
     private java.lang.Runnable updateSurfaceViewVisibility = new java.lang.Runnable() {
         @Override
         public void run() {
-            if (player.isPlaying() && player.getCurrentPosition() > 1) {
+            if (player != null && player.isPlaying() && player.getCurrentPosition() > 1) {
                 surfaceView.setAlpha(1);
             } else {
                 mHandler.postDelayed(this, 250);
@@ -474,7 +474,7 @@ public class ToSAndUMAFirstRunFragment
     }
     private void updateParams(boolean shouldUpdateSurfaceView) {
         int screenHeight = getActivity().getWindowManager().getDefaultDisplay().getHeight();
-        if (shouldUpdateSurfaceView) {
+        if (shouldUpdateSurfaceView && player != null) {
            // Adjust the size of the video
            // so it fits on the screen
            int videoWidth = player.getVideoWidth();

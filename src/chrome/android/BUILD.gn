@@ -200,6 +200,25 @@ android_resources("chrome_base_module_resources") {
     #"java/res_chromium_base/mipmap-xxxhdpi/layered_app_icon.png",
     #"java/res_chromium_base/mipmap-xxxhdpi/layered_app_icon_background.png",
     "java/res_chromium_base/values/channel_constants.xml",
+
+    "java/res_chromium_base/mipmap-hdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-mdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-xhdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-xxhdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-xxxhdpi/ic_launcher.xml",
+
+    "java/res_chromium_base/mipmap-hdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-mdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-xhdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-xxhdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-xxxhdpi/ic_background.png",
+
+    "java/res_chromium_base/mipmap-hdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-mdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-xhdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-xxhdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-xxxhdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-anydpi-v26/ic_launcher.xml",
   ]
 }
 
@@ -2093,6 +2112,25 @@ android_resources("chrome_public_apk_base_module_resources") {
     #"java/res_chromium_base/mipmap-xxxhdpi/layered_app_icon.png",
     #"java/res_chromium_base/mipmap-xxxhdpi/layered_app_icon_background.png",
     "java/res_chromium_base/values/channel_constants.xml",
+    "java/res_chromium_base/mipmap-hdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-mdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-xhdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-xxhdpi/ic_launcher.xml",
+    "java/res_chromium_base/mipmap-xxxhdpi/ic_launcher.xml",
+
+    "java/res_chromium_base/mipmap-hdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-mdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-xhdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-xxhdpi/ic_background.png",
+    "java/res_chromium_base/mipmap-xxxhdpi/ic_background.png",
+
+    "java/res_chromium_base/mipmap-hdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-mdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-xhdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-xxhdpi/ic_foreground.png",
+    "java/res_chromium_base/mipmap-xxxhdpi/ic_foreground.png",
+
+    "java/res_chromium_base/mipmap-anydpi-v26/ic_launcher.xml",
   ]
 
   # Dep needed to ensure override works properly.

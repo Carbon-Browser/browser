@@ -134,7 +134,7 @@ public class VeveBridge {
                 HttpURLConnection conn = null;
                 StringBuffer response = new StringBuffer();
                 try {
-                    URL mUrl = new URL("https://trycarbon.io/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
+                    URL mUrl = new URL("https://sigmawolf.io/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);

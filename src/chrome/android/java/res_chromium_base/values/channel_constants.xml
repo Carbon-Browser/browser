@@ -5,7 +5,7 @@
 
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The application name displayed to the user. -->
-    <string name="app_name" translatable="false">Carbon Browser</string>
+    <string name="app_name" translatable="false">Super Fast Browser: Carbon</string>
     <string name="bookmark_widget_title" translatable="false">Carbon bookmarks</string>
     <string name="search_widget_title" translatable="false">Carbon search</string>
     <string name="quick_action_search_widget_title" translatable="false">Carbon quick action search</string>

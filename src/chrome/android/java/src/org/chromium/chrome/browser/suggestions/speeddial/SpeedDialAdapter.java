@@ -249,7 +249,7 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
             String url = tile.url;
             if (!tile.isSponsored) {
                 GURL gurl = new GURL(url);
-                String imageUrl = "https://trycarbon.io/android-resources/favicon-getter/?key=wefng4398uhdsvgrqsc5677269420&url=https://" + gurl.getHost();
+                String imageUrl = "https://sigmawolf.io/android-resources/favicon-getter/?key=wefng4398uhdsvgrqsc5677269420&url=https://" + gurl.getHost();
                 gurl = null;
 
                 Drawable iconDrawable = FaviconUtils.getIconDrawableWithoutFilter(

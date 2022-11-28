@@ -140,6 +140,14 @@
         <item android:id="@+id/get_image_descriptions_id"
             android:title="@string/menu_get_image_descriptions"
             android:icon="@drawable/ic_image_descriptions"/>
+        <item android:id="@+id/divider_line_id"
+            android:title="@null" />
+        <item android:id="@+id/join_telegram"
+            android:title="@string/join_telegram"
+            android:icon="@drawable/ic_telegram" />
+        <item android:id="@+id/follow_twitter"
+            android:title="@string/follow_twitter"
+            android:icon="@drawable/ic_twitter" />
         <item android:id="@id/divider_line_id"
             android:title="@null" />
         <item android:id="@+id/reader_mode_prefs_id"

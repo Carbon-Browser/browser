@@ -87,9 +87,10 @@ public class BookmarkFeatures {
     }
 
     public static boolean isBookmarkMenuItemAsDedicatedRowEnabled() {
-        return isBookmarksRefreshEnabled()
-                && ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                        ChromeFeatureList.BOOKMARKS_REFRESH, "bookmark_in_app_menu", false);
+        // return isBookmarksRefreshEnabled()
+        //         && ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
+        //                 ChromeFeatureList.BOOKMARKS_REFRESH, "bookmark_in_app_menu", false);
+        return false;
     }
 
     public static boolean isBookmarksVisualRefreshEnabled() {

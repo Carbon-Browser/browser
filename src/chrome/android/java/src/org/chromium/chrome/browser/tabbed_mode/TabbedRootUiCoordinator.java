@@ -498,11 +498,11 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
             mEmptyBackgroundViewWrapper.initialize();
         }
 
-        if (!DeviceFormFactor.isNonMultiDisplayContextOnTablet(mActivity)
-                && (TabUiFeatureUtilities.isTabGroupsAndroidEnabled(mActivity)
-                        || TabUiFeatureUtilities.isConditionalTabStripEnabled())) {
+        // if (!DeviceFormFactor.isNonMultiDisplayContextOnTablet(mActivity)
+        //         && (TabUiFeatureUtilities.isTabGroupsAndroidEnabled(mActivity)
+        //                 || TabUiFeatureUtilities.isConditionalTabStripEnabled())) {
             getToolbarManager().enableBottomControls();
-        }
+        // }
 
         if (EphemeralTabCoordinator.isSupported()) {
             mEphemeralTabCoordinatorSupplier.set(
