@@ -1900,7 +1900,7 @@ Your Google account may have other forms of browsing history like searches and a
         Google Terms of Service
       </message>
       <message name="IDS_GOOGLE_TERMS_OF_SERVICE_URL" desc="URL for Google terms of service" translateable="false">
-        https://trycarbon.io/end-user-license-agreement/
+        https://carbon.website/end-user-license-agreement/
       </message>
       <message name="IDS_GOOGLE_TERMS_OF_SERVICE_DARK_MODE_URL" desc="URL for Google terms of service for dark mode" translateable="false">
         https://policies.google.com/terms/embedded?color_scheme=dark
@@ -1909,13 +1909,13 @@ Your Google account may have other forms of browsing history like searches and a
         Carbon Browser &amp; Carbon BrowserOS Additional Terms of Service
       </message>
       <message name="IDS_CHROME_ADDITIONAL_TERMS_OF_SERVICE_URL" desc="URL for Carbon Browser and Carbon BrowserOS additional terms of service" translateable="false">
-        https://trycarbon.io/privacy-policy-2/
+        https://carbon.website/privacy-policy-2/
       </message>
       <message name="IDS_PRIVACY_POLICY_TITLE" desc="Title for the Google privacy policy">
         Google Privacy Policy
       </message>
       <message name="IDS_GOOGLE_PRIVACY_POLICY_URL" desc="URL for the Google privacy policy" translateable="false">
-        https://trycarbon.io/privacy-policy-2/
+        https://carbon.website/privacy-policy-2/
       </message>
 
       <!-- Sign-in strings -->
@@ -5658,11 +5658,24 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
 
 
       <!-- SFB STRINGS -->
+      <message name="IDS_VIEW_MORE_DAPPS" desc="">
+        View More DApps
+      </message>
+      <message name="IDS_COMING_SOON" desc="">
+        Coming Soon
+      </message>
+      <message name="IDS_FEATURED_DAPS" desc="">
+        Featured DApps
+      </message>
+
       <message name="IDS_JOIN_TELEGRAM" desc="">
         Join Carbon Telegram
       </message>
       <message name="IDS_FOLLOW_TWITTER" desc="">
         Follow Carbon on Twitter
+      </message>
+      <message name="IDS_WHATS_NEW" desc="">
+        What's New
       </message>
 
       <message name="IDS_SET_DEFAULT" desc="">
@@ -5735,6 +5748,9 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       </message>
       <message name="IDS_ADS_BLOCKED" desc="">
         Trackers &amp; Ads Blocked
+      </message>
+      <message name="IDS_DATA_SAVED" desc="">
+        Data Saved
       </message>
       <message name="IDS_SEARCHES" desc="">
         Searches

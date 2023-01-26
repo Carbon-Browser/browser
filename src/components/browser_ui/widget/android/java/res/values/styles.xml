@@ -7,7 +7,7 @@
     <!-- AlertDialog styles -->
     <!-- This should be kept in sync with |Theme.BrowserUI.AlertDialog.NoActionBar|. -->
     <style name="ThemeOverlay.BrowserUI.AlertDialog" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
-        <item name="android:textColorPrimary">#43ca96</item>
+        <item name="android:textColorPrimary">#df8768</item>
         <item name="android:windowBackground">@drawable/dialog_bg_no_shadow</item>
         <item name="android:windowTitleStyle">@style/TextAppearance.AlertDialogTitleStyle</item>
         <item name="android:textColorHighlight">@color/text_highlight_color</item>

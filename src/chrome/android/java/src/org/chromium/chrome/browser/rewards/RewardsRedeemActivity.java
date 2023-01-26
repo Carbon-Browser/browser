@@ -214,7 +214,7 @@ public class RewardsRedeemActivity extends ChromeBaseAppCompatActivity implement
             finish();
             return true;
         } else if (item.getItemId() == R.id.menu_id_general_help) {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://trycarbon.io/#rewards"));
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://carbon.website/#rewards"));
             // Let Chrome know that this intent is from Chrome, so that it does not close the app when
             // the user presses 'back' button.
             intent.putExtra(Browser.EXTRA_APPLICATION_ID, this.getPackageName());

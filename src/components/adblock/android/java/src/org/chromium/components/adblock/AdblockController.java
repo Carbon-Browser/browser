@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
+import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
 
 /**
  * @brief Main access point for java UI code to access Filer Engine.
@@ -95,7 +96,7 @@ public final class AdblockController {
         }
     }
 
-    private AdblockController() {
+    public AdblockController() {
         mRecommendedSubscriptions = new ArrayList<Subscription>();
         mOnAdBlockedObservers = new CopyOnWriteArraySet<>();
         mSubscriptionUpdateObservers = new CopyOnWriteArraySet<>();
@@ -496,6 +497,10 @@ public final class AdblockController {
                 observer.onAdAllowed(resourceInfo);
             }
         }
+
+        org.chromium.base.Log.i("cunt cunt ", " cunt fuck blocked cunt");
+
+        if (wasBlocked) RewardsAPIBridge.getInstance().logAdBlocked();
     }
 
     @CalledByNative
@@ -532,6 +537,8 @@ public final class AdblockController {
                 observer.onPopupAllowed(resourceInfo);
             }
         }
+
+        if (wasBlocked) RewardsAPIBridge.getInstance().logAdBlocked();
     }
 
     @CalledByNative
@@ -544,6 +551,14 @@ public final class AdblockController {
             }
         } catch (MalformedURLException e) {
             Log.e(TAG, "Error parsing subscription url: " + url);
+        }
+    }
+
+    public void bindInstance(AdblockController instance) {
+        ThreadUtils.assertOnUiThread();
+        if (sInstance == null) {
+            sInstance = instance;
+            AdblockControllerJni.get().bind(sInstance);
         }
     }
 

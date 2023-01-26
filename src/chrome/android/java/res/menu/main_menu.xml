@@ -153,6 +153,9 @@
         <item android:id="@+id/reader_mode_prefs_id"
             android:title="@string/menu_reader_mode_prefs"
             android:icon="@drawable/reader_mode_prefs_icon" />
+        <item android:id="@+id/whats_new"
+            android:title="@string/whats_new"
+            android:icon="@drawable/ic_whats_new" />
         <item android:id="@+id/preferences_id"
             android:title="@string/menu_settings"
             android:icon="@drawable/settings_cog" />

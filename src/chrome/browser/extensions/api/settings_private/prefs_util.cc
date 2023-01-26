@@ -204,6 +204,9 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
   (*s_allowlist)[::prefs::kSidePanelHorizontalAlignment] =
       settings_api::PrefType::PREF_TYPE_BOOLEAN;
 
+  (*s_allowlist)[prefs::kWebRTCIPHandlingPolicy] =
+      settings_api::PrefType::PREF_TYPE_STRING;
+
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)

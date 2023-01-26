@@ -6,8 +6,8 @@
     <macro name="default_bg_color">?attr/colorSurface</macro>
     <macro name="default_bg_color_elev_0">?attr/colorSurface</macro>
 
-    <macro name="default_control_color_active">#43ca96</macro>
-    <macro name="default_control_color_normal">#43ca96</macro>
+    <macro name="default_control_color_active">#df8768</macro>
+    <macro name="default_control_color_normal">#df8768</macro>
 
     <macro name="default_icon_color">?attr/colorOnSurface</macro>
     <macro name="default_icon_color_accent1">?attr/colorPrimary</macro>

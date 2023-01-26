@@ -38,6 +38,7 @@ import android.graphics.Color;
 import android.content.res.ColorStateList;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.chrome.browser.theme.ThemeUtils;
+import androidx.appcompat.content.res.AppCompatResources;
 
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
@@ -219,19 +220,27 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     }
 
     @Override
+    public void onThemeChanged(int color) {
+        if (mBottomToolbarWrapper == null) return;
+        mBottomToolbarWrapper.setBackgroundColor(color);
+
+        ColorStateList tint = isColorDark(color) ? AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_light_tint_list)
+                        : AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_dark_tint_list);
+
+        ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
+        ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
+        ApiCompatibilityUtils.setImageTintList(mTabSwitcherButton, tint);
+        mTabSwitcherButton.setBrandedColorScheme(isColorDark(color) ? BrandedColorScheme.DARK_BRANDED_THEME : BrandedColorScheme.LIGHT_BRANDED_THEME);
+    }
+
+    @Override
     public void onTintChanged(ColorStateList tint, @BrandedColorScheme int brandedColorScheme) {
 
-        int color = isColorDark(brandedColorScheme) ?
-            ApiCompatibilityUtils.getColor(mBottomToolbarWrapper.getResources(), R.color.toolbar_background_primary_dark) :
-            ApiCompatibilityUtils.getColor(mBottomToolbarWrapper.getResources(), android.R.color.white);
-
-        ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, ThemeUtils.getThemedToolbarIconTint(mSearchAccelerator.getContext(), color));
-        // ApiCompatibilityUtils.setImageTintList(mSpeedDialButton, tint);
-        ApiCompatibilityUtils.setImageTintList(mHomeButton, ThemeUtils.getThemedToolbarIconTint(mHomeButton.getContext(), color));
-
-        mTabSwitcherButton.setBrandedColorScheme(color);
-
-        mBottomToolbarWrapper.setBackgroundColor(color);
+        // ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
+        // // ApiCompatibilityUtils.setImageTintList(mSpeedDialButton, tint);
+        // ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
+        //
+        // mTabSwitcherButton.setBrandedColorScheme(brandedColorScheme);
     }
 
     @Override

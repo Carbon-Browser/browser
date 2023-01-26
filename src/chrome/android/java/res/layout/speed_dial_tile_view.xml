@@ -8,6 +8,7 @@
     android:paddingEnd="4dp" >
 
     <FrameLayout
+        android:id="@+id/speed_dial_tile_view_icon_background"
         android:layout_width="@dimen/speed_dial_tile_view_icon_size"
         android:layout_height="@dimen/speed_dial_tile_view_icon_size"
         android:elevation="10dp"

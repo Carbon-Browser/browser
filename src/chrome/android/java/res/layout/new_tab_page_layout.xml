@@ -44,7 +44,6 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:background="#272626"
             android:weightSum="4">
 
             <LinearLayout
@@ -54,7 +53,7 @@
                 android:paddingStart="4dp"
                 android:paddingEnd="4dp"
                 android:paddingTop="15dp"
-                android:paddingBottom="20dp"
+                android:paddingBottom="10dp"
                 android:orientation="vertical">
                 <!-- android:background="@drawable/main_layout_curved_bottom_background" -->
 
@@ -63,18 +62,20 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="@dimen/toolbar_height_no_shadow"
-                    android:layout_marginBottom="15dp"
+                    android:layout_marginBottom="10dp"
                     android:layout_marginStart="8dp"
                     android:layout_marginEnd="8dp"
-                    android:orientation="vertical"
+                    android:orientation="horizontal"
                     android:paddingStart="10dp"
                     android:paddingEnd="10dp"
+                    android:gravity="center"
                     android:paddingTop="5dp"
                     android:paddingBottom="5dp">
 
+
                     <LinearLayout
-                        android:orientation="horizontal"
-                        android:layout_width="match_parent"
+                        android:orientation="vertical"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content">
 
                         <LinearLayout
@@ -91,11 +92,9 @@
                             android:layout_height="wrap_content"/>
 
                           <ImageView
-                            android:layout_width="wrap_content"
+                            android:layout_width="80dp"
                             android:layout_height="20dp"
-                            android:paddingStart="6dp"
                             android:layout_marginTop="1dp"
-                            android:paddingEnd="1dp"
                             android:src="@drawable/carbon_logo_ntp"/>
 
                           <TextView
@@ -105,142 +104,389 @@
                             android:layout_width="wrap_content"
                             android:textSize="14sp"
                             android:layout_height="wrap_content"/>
+                        </LinearLayout>
+
+                        <LinearLayout
+                          android:orientation="horizontal"
+                          android:layout_width="wrap_content"
+                          android:paddingTop="10dp"
+                          android:layout_height="wrap_content">
+
+                          <FrameLayout
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content">
+                              <TextView
+                                  android:id="@+id/ntp_rewards_earned_today"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:textSize="26sp"
+                                  android:textColor="#EF7E5E"
+                                  android:layout_marginBottom="14dp"
+                                  android:layout_gravity="center"/>
+
+                              <TextView
+                                  android:text="@string/rewards_earned_today"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:textColor="#50515B"
+                                  android:layout_gravity="center"
+                                  android:textSize="14sp"
+                                  android:paddingTop="30dp"/>
+                          </FrameLayout>
+
+                          <FrameLayout
+                              android:layout_width="wrap_content"
+                              android:layout_marginStart="15dp"
+                              android:layout_height="wrap_content">
+                              <TextView
+                                  android:id="@+id/ntp_rewards_total"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:textSize="26sp"
+                                  android:textColor="#4BAECF"
+                                  android:layout_marginBottom="14dp"
+                                  android:layout_gravity="center"/>
+
+                              <TextView
+                                  android:text="@string/rewards_total"
+                                  android:layout_width="wrap_content"
+                                  android:layout_height="wrap_content"
+                                  android:textColor="#50515B"
+                                  android:textSize="14sp"
+                                  android:layout_gravity="center"
+                                  android:paddingTop="30dp"/>
+                          </FrameLayout>
 
                         </LinearLayout>
 
-                        <View
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_weight="2" />
-
-                        <androidx.appcompat.widget.AppCompatImageView
-                            android:id="@+id/ntp_widget_more_option"
-                            android:layout_width="24dp"
-                            android:layout_height="24dp"
-                            android:contentDescription="@null"
-                            app:srcCompat="@drawable/ic_more_horiz"/>
                     </LinearLayout>
 
                     <LinearLayout
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:paddingTop="5dp"
-                        android:weightSum="5">
-
-                        <FrameLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="2">
-                            <TextView
-                                android:id="@+id/ntp_rewards_earned_today"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:textSize="26sp"
-                                android:textColor="#EF7E5E"
-                                android:layout_marginBottom="14dp"
-                                android:layout_gravity="center"/>
-
-                            <TextView
-                                android:text="@string/rewards_earned_today"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:textColor="#50515B"
-                                android:layout_gravity="center"
-                                android:textSize="14sp"
-                                android:paddingTop="30dp"/>
-                        </FrameLayout>
-
-                        <FrameLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="2">
-                            <TextView
-                                android:id="@+id/ntp_rewards_total"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:textSize="26sp"
-                                android:textColor="#4BAECF"
-                                android:layout_marginBottom="14dp"
-                                android:layout_gravity="center"/>
-
-                            <TextView
-                                android:text="@string/rewards_total"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:textColor="#50515B"
-                                android:textSize="14sp"
-                                android:layout_gravity="center"
-                                android:paddingTop="30dp"/>
-                        </FrameLayout>
+                        android:orientation="vertical">
 
                         <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
+                            android:orientation="horizontal"
+                            android:layout_gravity="center_vertical">
 
-                            <LinearLayout
+                            <TextView
+                                android:id="@+id/ntp_data_saved"
+                                android:layout_width="45dp"
+                                android:layout_height="wrap_content"
+                                android:textSize="16sp"
+                                android:textColor="#50515B"
+                                android:layout_gravity="left"
+                                android:gravity="center"/>
+
+                            <TextView
+                                android:text="@string/data_saved"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:layout_gravity="center_vertical">
-                                <TextView
-                                    android:id="@+id/ntp_ads_blocked"
-                                    android:layout_width="45dp"
-                                    android:layout_height="wrap_content"
-                                    android:textSize="18sp"
-                                    android:textColor="#50515B"
-                                    android:layout_gravity="left"
-                                    android:gravity="center"/>
+                                android:textColor="#50515B"
+                                android:textSize="14dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:layout_gravity="center_vertical"/>
+                        </LinearLayout>
 
-                                <TextView
-                                    android:text="@string/ads_blocked"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:textColor="#50515B"
-                                    android:textSize="14dp"
-                                    android:ellipsize="end"
-                                    android:maxLines="1"
-                                    android:layout_gravity="center_vertical"/>
-                            </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_gravity="center_vertical">
+                            <TextView
+                                android:id="@+id/ntp_ads_blocked"
+                                android:layout_width="45dp"
+                                android:layout_height="wrap_content"
+                                android:textSize="18sp"
+                                android:textColor="#50515B"
+                                android:layout_gravity="left"
+                                android:gravity="center"/>
 
-                            <LinearLayout
+                            <TextView
+                                android:text="@string/ads_blocked"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:orientation="horizontal"
-                                android:layout_gravity="center_vertical">
-                                <TextView
-                                    android:id="@+id/ntp_searches"
-                                    android:layout_width="45dp"
-                                    android:layout_height="wrap_content"
-                                    android:textSize="18sp"
-                                    android:textColor="#50515B"
-                                    android:layout_gravity="left"
-                                    android:gravity="center"/>
+                                android:textColor="#50515B"
+                                android:textSize="14dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:layout_gravity="center_vertical"/>
+                        </LinearLayout>
 
-                                <TextView
-                                    android:text="@string/searches"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:textColor="#50515B"
-                                    android:textSize="14sp"
-                                    android:ellipsize="end"
-                                    android:maxLines="1"
-                                    android:layout_gravity="center_vertical"/>
-                            </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_gravity="center_vertical">
+                            <TextView
+                                android:id="@+id/ntp_searches"
+                                android:layout_width="45dp"
+                                android:layout_height="wrap_content"
+                                android:textSize="18sp"
+                                android:textColor="#50515B"
+                                android:layout_gravity="left"
+                                android:gravity="center"/>
+
+                            <TextView
+                                android:text="@string/searches"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textColor="#50515B"
+                                android:textSize="14sp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:layout_gravity="center_vertical"/>
                         </LinearLayout>
                     </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
 
+            <LinearLayout
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:layout_marginBottom="25dp"
+              android:background="@drawable/ntp_rounded_background"
+              android:orientation="vertical">
+
+              <!-- Coming soon -->
+              <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/coming_soon_textview"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-condensed"
+                    android:textColor="@android:color/white"
+                    android:layout_marginBottom="10dp"
+                    android:textSize="20sp"
+                    android:text="@string/coming_soon"
+                    android:layout_gravity="center" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/coming_soon_tile1"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/coming_soon_tile2"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/coming_soon_tile3"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/coming_soon_tile4"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                </LinearLayout>
+              </LinearLayout>
+
+
+              <!-- Featured DApps -->
+              <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="5dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/featured_daps_textview"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-condensed"
+                    android:layout_marginTop="15dp"
+                    android:textColor="@android:color/white"
+                    android:layout_marginBottom="10dp"
+                    android:textSize="20sp"
+                    android:text="@string/featured_daps"
+                    android:layout_gravity="center" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps1"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps2"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps3"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps4"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="horizontal">
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/featured_daps5"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/featured_daps6"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/featured_daps7"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:id="@+id/featured_daps8"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                </LinearLayout>
+              </LinearLayout>
+
+              <TextView
+                  android:id="@+id/view_more_dapps_btn"
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:fontFamily="sans-serif-condensed"
+                  android:layout_marginTop="10dp"
+                  android:paddingStart="4dp"
+                  android:paddingEnd="4dp"
+                  android:textColor="@android:color/black"
+                  android:layout_marginBottom="10dp"
+                  android:textSize="16sp"
+                  android:background="@drawable/ntp_bg_credit_bg"
+                  android:text="@string/view_more_dapps"
+                  android:layout_gravity="center" />
+
+            </LinearLayout>
+
+
+            <!-- end -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/ntp_news_recyclerview"
                 android:layout_width="match_parent"
                 android:nestedScrollingEnabled="false"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:layout_marginTop="10dp" />
+                android:paddingTop="10dp" />
 
             <!-- Search provider logo -->
             <FrameLayout

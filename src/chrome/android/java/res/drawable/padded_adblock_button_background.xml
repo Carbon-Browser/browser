@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_adblock_active"
-    android:insetTop="32dp"
-    android:insetBottom="32dp"
-    android:insetLeft="32dp"
-    android:insetRight="32dp" />
+    android:insetTop="62dp"
+    android:insetBottom="62dp"
+    android:insetLeft="62dp"
+    android:insetRight="62dp" />

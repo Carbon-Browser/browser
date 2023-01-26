@@ -90,6 +90,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.json.JSONObject;
 import org.chromium.ui.widget.Toast;
+import android.widget.FrameLayout;
 import org.chromium.base.task.AsyncTask;
 import androidx.recyclerview.widget.RecyclerView;
 import org.chromium.chrome.browser.ntp.news.NTPNewsRecyclerAdapter;
@@ -208,7 +209,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                 int id = item.getItemId();
                 if (id == R.id.learn_more_id) {
                     if (getContext() instanceof ChromeActivity) {
-                        LoadUrlParams loadUrlParams = new LoadUrlParams("https://trycarbon.io/#rewards");
+                        LoadUrlParams loadUrlParams = new LoadUrlParams("https://carbon.website/#rewards");
                         ((ChromeActivity)getContext()).getActivityTab().loadUrl(loadUrlParams);
                     }
                 }
@@ -254,23 +255,33 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             nSearchesString = Math.round(nSearches/100000) + "M";
         }
         searchesTextView.setText(nSearchesString);
+
+        String mDataSaved = nAdsBlocked+"";
+        final TextView dataTextView = (TextView)findViewById(R.id.ntp_data_saved);
+        if (mDataSaved.length() >= 4) {
+            mDataSaved = Math.round((nAdsBlocked/1000)*1.6) + "Mb";
+        } else {
+            mDataSaved = Math.round(nAdsBlocked*1.6) + "kB";
+        }
+        dataTextView.setText(mDataSaved);
+
         final TextView earnedTodayTextView = (TextView)findViewById(R.id.ntp_rewards_earned_today);
         earnedTodayTextView.setText(mRewardsBridge.getCreditsEarnedToday()+"");
         final TextView totalBalanceTextView = (TextView)findViewById(R.id.ntp_rewards_total);
         totalBalanceTextView.setText(mRewardsBridge.getTotalCreditBalance()+"");
-        AppCompatImageView widgetMoreOption = findViewById(R.id.ntp_widget_more_option);
-        if (widgetMoreOption != null) {
-            widgetMoreOption.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    showPopupMenu(getContext(), view);
-                }
-            });
-        }
+        // AppCompatImageView widgetMoreOption = findViewById(R.id.ntp_widget_more_option);
+        // if (widgetMoreOption != null) {
+        //     widgetMoreOption.setOnClickListener(new View.OnClickListener() {
+        //         @Override
+        //         public void onClick(View view) {
+        //             showPopupMenu(getContext(), view);
+        //         }
+        //     });
+        // }
         // speed dial section
         mSpeedDialView = SpeedDialController.inflateSpeedDial(getContext(), 5, null, false);
         if(mSpeedDialView.getParent() != null) ((ViewGroup)mSpeedDialView.getParent()).removeView(mSpeedDialView);
-        mMainLayoutTopSection.addView(mSpeedDialView, 1);
+        mMainLayout.addView(mSpeedDialView, 2);
         mNewsRecyclerView = findViewById(R.id.ntp_news_recyclerview);
         SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
         boolean isNewsEnabled = mPrefs.getBoolean("ntp_news_toggle", true);
@@ -283,6 +294,200 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             exploreStub.setLayoutResource(R.layout.experimental_explore_sites_section);
             mExploreSectionView = exploreStub.inflate();
         }
+
+        initialiseWeb3Features();
+    }
+
+    private void initialiseWeb3Features() {
+        // Coming soon
+        View comingSoonTile1 = findViewById(R.id.coming_soon_tile1);
+        View comingSoonTile2 = findViewById(R.id.coming_soon_tile2);
+        View comingSoonTile3 = findViewById(R.id.coming_soon_tile3);
+        View comingSoonTile4 = findViewById(R.id.coming_soon_tile4);
+
+        comingSoonTile1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://carbon.website/csix/");
+            }
+        });
+
+        comingSoonTile2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://carbon.website/csix/");
+            }
+        });
+
+        comingSoonTile3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://carbon.website/csix/");
+            }
+        });
+
+        comingSoonTile4.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://carbon.website/csix/");
+            }
+        });
+
+        ((TextView) comingSoonTile1.findViewById(R.id.speed_dial_tile_textview)).setText("Wallet");
+        ((TextView) comingSoonTile2.findViewById(R.id.speed_dial_tile_textview)).setText("Staking");
+        ((TextView) comingSoonTile3.findViewById(R.id.speed_dial_tile_textview)).setText("Swap");
+        ((TextView) comingSoonTile4.findViewById(R.id.speed_dial_tile_textview)).setText("Bridge");
+
+        FrameLayout comingSoonTile1Background = comingSoonTile1.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout comingSoonTile2Background = comingSoonTile2.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout comingSoonTile3Background = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout comingSoonTile4Background = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon_background);
+
+        comingSoonTile1Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        comingSoonTile2Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        comingSoonTile3Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        comingSoonTile4Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+
+        ImageView comingSoonTile1Image = comingSoonTile1.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView comingSoonTile2Image = comingSoonTile2.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView comingSoonTile3Image = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView comingSoonTile4Image = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon);
+
+
+        comingSoonTile1Image.setBackground(getResources().getDrawable(R.drawable.ic_wallet));
+        comingSoonTile2Image.setBackground(getResources().getDrawable(R.drawable.ic_staking));
+        comingSoonTile3Image.setBackground(getResources().getDrawable(R.drawable.ic_swap));
+        comingSoonTile4Image.setBackground(getResources().getDrawable(R.drawable.ic_bridge));
+
+        float scale = getResources().getDisplayMetrics().density;
+        int dpAsPixelsSmall = (int) (37*scale + 0.5f);
+        ViewGroup.LayoutParams paramsSmall = comingSoonTile1Image.getLayoutParams();
+        paramsSmall.width = dpAsPixelsSmall;
+        paramsSmall.height = dpAsPixelsSmall;
+
+        int dpAsPixels = (int) (37*scale + 0.5f);
+        ViewGroup.LayoutParams params = comingSoonTile1Image.getLayoutParams();
+        params.width = dpAsPixels;
+        params.height = dpAsPixels;
+
+        comingSoonTile1Image.setLayoutParams(paramsSmall);
+
+        comingSoonTile2Image.setLayoutParams(params);
+
+        comingSoonTile3Image.setLayoutParams(params);
+
+        comingSoonTile4Image.setLayoutParams(params);
+
+        // DApps Links
+        View featuredDappTile1 = findViewById(R.id.featured_daps1);
+        View featuredDappTile2 = findViewById(R.id.featured_daps2);
+        View featuredDappTile3 = findViewById(R.id.featured_daps3);
+        View featuredDappTile4 = findViewById(R.id.featured_daps4);
+        View featuredDappTile5 = findViewById(R.id.featured_daps5);
+        View featuredDappTile6 = findViewById(R.id.featured_daps6);
+        View featuredDappTile7 = findViewById(R.id.featured_daps7);
+        View featuredDappTile8 = findViewById(R.id.featured_daps8);
+
+        ((TextView) featuredDappTile1.findViewById(R.id.speed_dial_tile_textview)).setText("ChatGPT");
+        ((TextView) featuredDappTile2.findViewById(R.id.speed_dial_tile_textview)).setText("OpenSea");
+        ((TextView) featuredDappTile3.findViewById(R.id.speed_dial_tile_textview)).setText("Uniswap");
+        ((TextView) featuredDappTile4.findViewById(R.id.speed_dial_tile_textview)).setText("AAVE");
+        ((TextView) featuredDappTile5.findViewById(R.id.speed_dial_tile_textview)).setText("Pancake");
+        ((TextView) featuredDappTile6.findViewById(R.id.speed_dial_tile_textview)).setText("ENS");
+        ((TextView) featuredDappTile7.findViewById(R.id.speed_dial_tile_textview)).setText("Axie Infity");
+        ((TextView) featuredDappTile8.findViewById(R.id.speed_dial_tile_textview)).setText("Curate");
+
+        ((FrameLayout) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+
+        ((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_chatgpt));
+        ((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_opensea));
+        ((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_uniswap));
+        ((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_aave));
+        ((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_pancake));
+        ((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_ens));
+        ((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_axie));
+        ((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_curate));
+
+
+        featuredDappTile1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://chat.openai.com/");
+            }
+        });
+
+        featuredDappTile2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://opensea.io/");
+            }
+        });
+
+        featuredDappTile3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://app.uniswap.org/");
+            }
+        });
+
+        featuredDappTile4.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://app.aave.com/");
+            }
+        });
+
+        featuredDappTile5.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://pancakeswap.finance/");
+            }
+        });
+
+        featuredDappTile6.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://ens.domains/");
+            }
+        });
+
+        featuredDappTile7.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://axieinfinity.com/");
+            }
+        });
+
+        featuredDappTile8.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://curate.style/");
+            }
+        });
+
+
+
+        View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
+        mViewMoreDappsBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://magic.store/apps");
+            }
+        });
+    }
+
+    private void loadUrl(String url) {
+      if (getContext() instanceof ChromeActivity) {
+          LoadUrlParams loadUrlParams = new LoadUrlParams(url);
+          ((ChromeActivity)getContext()).getActivityTab().loadUrl(loadUrlParams);
+      }
     }
 
     private void getNewsArticles() {

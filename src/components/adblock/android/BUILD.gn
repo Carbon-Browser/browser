@@ -33,6 +33,8 @@ android_library("adblock_java") {
   ]
 
   deps = [
+    "//chrome/browser/ui/android/omnibox:java",
+    "//chrome/android/third_party/amplitude:amplitude_java",
     ":java_resources",
     ":jni_headers",
     "//base:base_java",

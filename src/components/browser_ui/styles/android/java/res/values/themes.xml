@@ -31,7 +31,7 @@
         <item name="colorOnSurfaceInverse">@color/baseline_neutral_50</item>
         <item name="colorOnSurfaceVariant">@color/baseline_neutral_variant_700</item>
         <item name="colorOutline">@color/baseline_neutral_variant_500</item>
-        <item name="colorPrimary">#43ca96</item>
+        <item name="colorPrimary">#df8768</item>
         <item name="colorSurface">@color/baseline_neutral_0</item>
         <item name="colorSurfaceVariant">@color/baseline_neutral_variant_100</item>
 
@@ -71,7 +71,7 @@
         <item name="globalFilledButtonTextColor">@color/default_text_color_on_accent1_list</item>
         <item name="globalTextButtonTextColor">@color/default_text_color_accent1_tint_list</item>
         <item name="globalOutlinedButtonBorderColor">@macro/divider_line_bg_color</item>
-        <item name="globalLinkTextColor">#43ca96</item>
-        <item name="globalClickableSpanColor">#43ca96</item>
+        <item name="globalLinkTextColor">#df8768</item>
+        <item name="globalClickableSpanColor">#df8768</item>
     </style>
 </resources>

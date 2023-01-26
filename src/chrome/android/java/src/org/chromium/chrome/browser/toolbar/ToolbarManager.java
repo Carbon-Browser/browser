@@ -315,6 +315,8 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
     private ColorStateList mTempColorStateList;
     private @BrandedColorScheme int mTempBrandedColorScheme;
 
+    private int mTempColor;
+
     private boolean mInitializedWithNative;
     private Runnable mOnInitializedRunnable;
     private Runnable mMenuStateObserver;
@@ -1307,6 +1309,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         mBottomControlsCoordinatorSupplier.set(mBottomControlsCoordinator);
 
         onTintChanged(mTempColorStateList, mTempBrandedColorScheme);
+        onThemeColorChanged(mTempColor, false);
     }
 
     /**
@@ -1556,7 +1559,8 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         LinearLayout mLoadingIndicatorContainer = contentView.findViewById(R.id.reward_loading_container);
         ImageView mLoadingIndicator = contentView.findViewById(R.id.reward_loading);
         Glide.with(contentView.getContext())
-            .load("https://sigmawolf.io/android-resources/images/rewards_loading.gif")
+            // .load("https://sigmawolf.io/android-resources/images/rewards_loading.gif")
+            .load("http://qnni7t2n4hc7770iq8npfli8u4.ingress.europlots.com/wp-content/uploads/2022/12/loading.gif")
             .thumbnail(0.05f)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
             .into(new DrawableImageViewTarget(mLoadingIndicator));
@@ -1601,7 +1605,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             @Override
             public void onClick(View v) {
                 if (v.getContext() instanceof ChromeActivity) {
-                    LoadUrlParams loadUrlParams = new LoadUrlParams("https://trycarbon.io/#rewards");
+                    LoadUrlParams loadUrlParams = new LoadUrlParams("https://carbon.website/#rewards");
                     ChromeActivity activity = (ChromeActivity)v.getContext();
                     activity.getActivityTab().loadUrl(loadUrlParams);
                 }
@@ -1928,6 +1932,12 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
      */
     @Override
     public void onThemeColorChanged(int color, boolean shouldAnimate) {
+        if (mBottomControlsCoordinator != null) {
+            ((BottomToolbarThemeCommunicator) mBottomControlsCoordinator).onThemeChanged(color);
+        }
+
+        mTempColor = color;
+
         if (!mShouldUpdateToolbarPrimaryColor) return;
 
         boolean colorChanged = mCurrentThemeColor != color;

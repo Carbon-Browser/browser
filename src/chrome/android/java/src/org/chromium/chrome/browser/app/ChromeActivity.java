@@ -252,6 +252,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.chromium.components.adblock.AdblockController;
+
 /**
  * A {@link AsyncInitializationActivity} that builds and manages a {@link CompositorViewHolder}
  * and associated classes.
@@ -266,6 +268,8 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
                    TabModelInitializer {
     private static final String TAG = "ChromeActivity";
     private C mComponent;
+
+    private AdblockController mAdblockController;
 
     /** Used to access the {@link ShareDelegate} from {@link WindowAndroid}. */
     private final UnownedUserDataSupplier<ShareDelegate> mShareDelegateSupplier =
@@ -1357,6 +1361,9 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
                 createContextReporterIfNeeded();
             });
         }
+
+        mAdblockController = new AdblockController();
+        mAdblockController.bindInstance(mAdblockController);
     }
 
     /**
@@ -2581,6 +2588,12 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
 
         if (id == R.id.follow_twitter) {
           LoadUrlParams loadParams = new LoadUrlParams("https://twitter.com/trycarbonio");
+          currentTab.loadUrl(loadParams);
+          return true;
+        }
+
+        if (id == R.id.whats_new) {
+          LoadUrlParams loadParams = new LoadUrlParams("https://carbon.website/changelog");
           currentTab.loadUrl(loadParams);
           return true;
         }

@@ -291,7 +291,7 @@ class SigninFirstRunMediator implements AccountsChangeObserver, ProfileDataCache
      * disabled by policy.
      */
     private SpannableString getFooterString(boolean isMetricsReportingDisabled) {
-        String footerString = mContext.getString(R.string.fre_tos); // cunt
+        String footerString = mContext.getString(R.string.fre_tos);
 
         ArrayList<SpanApplier.SpanInfo> spans = new ArrayList<>();
         // Terms of Service SpanInfo.

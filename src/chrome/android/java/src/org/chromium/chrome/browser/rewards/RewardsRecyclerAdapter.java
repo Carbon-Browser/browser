@@ -160,7 +160,7 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
             mProHelpBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    mRewardsCommunicator.loadRewardsUrl("https://trycarbon.io/#pro", view);
+                    mRewardsCommunicator.loadRewardsUrl("https://carbon.website/#pro", view);
 
                     mPopup.dismiss();
                 }

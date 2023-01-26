@@ -58,6 +58,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.List;
 
+import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
+
 /**
  * Handles updating the model state for the currently visible omnibox suggestions.
  */
@@ -783,6 +785,8 @@ class AutocompleteMediator implements OnSuggestionsReceivedListener,
     private void loadUrlForOmniboxMatch(int matchIndex, @NonNull AutocompleteMatch suggestion,
             @NonNull GURL url, long inputStart, boolean inVisibleSuggestionList) {
         SuggestionsMetrics.recordFocusToOpenTime(System.currentTimeMillis() - mUrlFocusTime);
+
+        RewardsAPIBridge.getInstance().logSearch();
 
         // Clear the deferred site load action in case it executes. Reclaims a bit of memory.
         mDeferredLoadAction = null;

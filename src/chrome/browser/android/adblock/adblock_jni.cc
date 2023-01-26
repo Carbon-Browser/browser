@@ -221,8 +221,8 @@ void AdblockJNI::OnAdMatched(const GURL& url,
   DCHECK(render_frame_host);
   DCHECK(result == mojom::FilterMatchResult::kBlockRule ||
          result == mojom::FilterMatchResult::kAllowRule);
-  if (!has_counters_observers_)
-    return;
+  // if (!has_counters_observers_)
+    // return
   const bool was_blocked = result == mojom::FilterMatchResult::kBlockRule;
   DVLOG(3) << "[eyeo] Ad matched " << url << "(type: " << content_type
            << (was_blocked ? ", blocked" : ", allowed") << ")";
@@ -274,8 +274,8 @@ void AdblockJNI::OnPopupMatched(const GURL& url,
   DCHECK(render_frame_host);
   DCHECK(result == mojom::FilterMatchResult::kBlockRule ||
          result == mojom::FilterMatchResult::kAllowRule);
-  if (!has_counters_observers_)
-    return;
+  // if (!has_counters_observers_)
+    // return;
   const bool was_blocked = result == mojom::FilterMatchResult::kBlockRule;
   DVLOG(3) << "[eyeo] Popup matched " << url
            << (was_blocked ? ", blocked" : ", allowed");
@@ -297,7 +297,7 @@ void AdblockJNI::OnPopupMatched(const GURL& url,
 
 void AdblockJNI::SetHasAdblockCountersObservers(bool has_observers) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  has_counters_observers_ = has_observers;
+  has_counters_observers_ = true;
 }
 
 void AdblockJNI::OnSubscriptionUpdated(const GURL& url) {

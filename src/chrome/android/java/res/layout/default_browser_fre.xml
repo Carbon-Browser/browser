@@ -61,7 +61,7 @@
                 android:layout_gravity="center"
                 android:paddingStart="@dimen/fre_button_padding"
                 android:paddingEnd="@dimen/fre_button_padding"
-                android:textColor="#43ca96"
+                android:textColor="#df8768"
                 android:text="@string/password_manager_outdated_gms_negative_button"
                 style="@style/TextButton.FirstLaunch" />
         </LinearLayout>
