@@ -134,7 +134,7 @@ public class VeveBridge {
                 HttpURLConnection conn = null;
                 StringBuffer response = new StringBuffer();
                 try {
-                    URL mUrl = new URL("https://sigmawolf.io/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
+
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);
@@ -191,7 +191,6 @@ public class VeveBridge {
                 HttpURLConnection conn = null;
                 StringBuffer response = new StringBuffer();
                 try {
-                    URL mUrl = new URL("https://stq85.veve.com/qlapi?o=stq85&s=99995&u=com.browser.tssomas&itype=ss&f=json&ist=2&n=5&is=256x256&di=" + deviceID + "&ip=" + ip);
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);
@@ -281,8 +280,6 @@ public class VeveBridge {
                         processedUrl = processedUrl.substring(0, processedUrl.length() - 1);
                     }
 
-                    URL mUrl = new URL("https://poa39.veve.com/qlapi?o=poa39&s=52977&u=com.browser.tssomas&itype=ss&f=json&i=0&&af=0&di=" + deviceID + "&k=" + processedUrl + "&ip=" + ip);
-
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);
                     conn.setConnectTimeout(4000);
@@ -365,7 +362,6 @@ public class VeveBridge {
                         processedUrl = processedUrl.substring(0, processedUrl.length() - 1);
                     }
 
-                    URL mUrl = new URL("https://poa39.veve.com/qlapi?o=poa39&s=52977&u=com.browser.tssomas&itype=ss&f=json&i=0&&af=0&di=" + deviceID + "&k=" + processedUrl + "&ip=" + ip);
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);

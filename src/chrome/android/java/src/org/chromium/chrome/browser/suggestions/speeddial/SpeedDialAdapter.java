@@ -249,15 +249,14 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
             String url = tile.url;
             if (!tile.isSponsored) {
                 GURL gurl = new GURL(url);
-                String imageUrl = "https://sigmawolf.io/android-resources/favicon-getter/?key=wefng4398uhdsvgrqsc5677269420&url=https://" + gurl.getHost();
                 gurl = null;
 
                 Drawable iconDrawable = FaviconUtils.getIconDrawableWithoutFilter(
-                        null, url, Color.WHITE, mIconGenerator, res, res.getDimensionPixelSize(R.dimen.speed_dial_tile_view_icon_size));
+                        null, url, Color.TRANSPARENT, mIconGenerator, res, res.getDimensionPixelSize(R.dimen.speed_dial_tile_view_icon_size));
                 holder.imageView.setBackground(iconDrawable);
 
                 final float density = res.getDisplayMetrics().density;
-                final int valueInDp = (int)(26 * density);
+                final int valueInDp = (int)(9 * density);
                 Glide.with(holder.imageView)
                     .load(imageUrl)
                     .thumbnail(0.1f)
@@ -285,11 +284,11 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
                     });
             } else if (tile.isSponsored) {
                 Drawable iconDrawable = FaviconUtils.getIconDrawableWithoutFilter(
-                        null, url, Color.WHITE, mIconGenerator, res, 120);
+                        null, url, Color.TRANSPARENT, mIconGenerator, res, 120);
                 holder.imageView.setBackground(iconDrawable);
 
                 final float density = res.getDisplayMetrics().density;
-                final int valueInDp = (int)(14 * density);
+                final int valueInDp = (int)(9 * density);
                 Glide.with(holder.imageView)
                     .load(tile.imageUrl)
                     .thumbnail(0.1f)

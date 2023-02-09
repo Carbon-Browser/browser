@@ -47,8 +47,12 @@ import org.json.JSONObject;
 import android.widget.LinearLayout;
 import android.util.TypedValue;
 
+import org.json.JSONArray;
+
 import org.chromium.chrome.browser.monetization.VeveBridge;
 import org.chromium.chrome.browser.monetization.VeveUniversalObj;
+
+import java.lang.Character;
 
 public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecyclerAdapter.ViewHolder> implements VeveBridge.VeveUniversalCommunicator {
 
@@ -59,11 +63,12 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
     private String mCountryCode;
 
+    private static final String mCoindarToken = "70277:34tJkQia1LEWXFUTf5N";
+
     private SharedPreferences mPrefs;
 
     private boolean blockImageRefresh = false;
 
-    private static final String ARTICLE_IMAGE_URL_BASE = "https://sigmawolf.io/android-resources/article-image-getter/?key=ergnpiqg95pbwfewnfqewfk42939&url=";
 
     // data is passed into the constructor
     public NTPNewsRecyclerAdapter(Context context) {
@@ -220,7 +225,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
     }
 
     private void getNewsData() {
-        final String countryEndpointUrl = "https://news.google.com/rss?gl=" + mCountryCode;
+        final String countryEndpointUrl = "https://coindar.org/api/v2/events?access_token=" + mCoindarToken + "&page=1&page_size=30&sort_by=date_added&order_by=1";
         new AsyncTask<String>() {
             @Override
             protected String doInBackground() {
@@ -237,9 +242,8 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                         sb.append(inputLine);
                     }
                     response = sb.toString();
-
                     in.close();
-                } catch (Exception ignore) { }
+                } catch (Exception ignore) {}
 
                 return response;
             }
@@ -248,12 +252,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
             protected void onPostExecute(String result) {
                 if (result != null) {
                     try {
-                        DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-                        InputSource src = new InputSource();
-                        src.setCharacterStream(new StringReader(result));
-
-                        Document doc = builder.parse(src);
-                        NodeList nodes = doc.getElementsByTagName("item");
+                        JSONArray mJsonArray = new JSONArray(result);
 
                         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
@@ -261,23 +260,34 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                         mPrefs.edit().putLong("time_news_cached", mCurrentTime).apply();
                         mPrefs.edit().putString("cached_news", result).apply();
 
-                        for (int i = 0; i < nodes.getLength(); i++) {
-                            Node node = nodes.item(i);
-                            if (node.getNodeType() == Node.ELEMENT_NODE) {
-                                Element element = (Element) node;
+                        for (int i = 0; i < mJsonArray.length(); i++) {
+                            JSONObject mItem = mJsonArray.getJSONObject(i);
 
-                                String title = getValue("title", element);
-                                String url = getValue("link", element);
-                                String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
-                                String publisher = getValue("source", element);
-                                String date = getValue("pubDate", element);
+                            String title = mItem.getString("caption");
+                            String url = mItem.getString("source");
 
-                                NewsDataObject dataObj = new NewsDataObject(url, null, title, publisher, date, imageGetterUrl);
+                            String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
+                            String publisher = "";//getValue("source", element);
+                            String date = mItem.getString("date_public");
 
-                                mDataTemp.add(dataObj);
-
-                                fetchImagesFromGetter(i, imageGetterUrl);
+                            // get Image Url
+                            String imageUrl = "";
+                            for (int j = url.length() - 1; j != 0; j--) {
+                              if (Character.toString(url.charAt(j)).equals("-")) {
+                                imageUrl = "https://coindar.org/images/events/" + url.substring(j + 1) + "_en.jpg";
+                                break;
+                              }
                             }
+
+                            NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, imageGetterUrl);
+
+                            mData.add(dataObj);
+                            // mDataTemp.add(dataObj);
+
+                            notifyItemInserted(mDataTemp.size() - 1);
+
+                            // disable images, coindar doesnt do them
+                            // fetchImagesFromGetter(i, imageGetterUrl);
                         }
                     } catch(Exception ignore) { }
                 }
@@ -448,14 +458,10 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
             TextView publishDateTextView = view.findViewById(R.id.ntp_news_item_publishdate);
             String articleDate = ((NewsDataObject) mData.get(position)).articleDate;
-            String [] arr = articleDate.split(" ");
-            articleDate = "";
-            for(int i = 0; i < 3; i++){
-                 articleDate = articleDate + " " + arr[i];
-            }
 
             publishDateTextView.setText(articleDate);
-        } catch (Exception ignore) {}
+        } catch (Exception ignore) {
+        org.chromium.base.Log.i("cuntcunt cunt", "fuck you "+ignore);}
     }
 
     // total number of rows

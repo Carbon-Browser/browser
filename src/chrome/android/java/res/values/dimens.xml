@@ -8,7 +8,7 @@
 
 
     <dimen name="min_popup_dialog_height">148dp</dimen>
-    <dimen name="speed_dial_tile_view_icon_size">50dp</dimen>
+    <dimen name="speed_dial_tile_view_icon_size">56dp</dimen>
     <dimen name="speed_dial_tile_grid_layout_vertical_spacing_modern">14dp</dimen>
     <dimen name="speed_dial_layout_margin_top">12dp</dimen>
     <dimen name="speed_dial_icon_margin_top">6dp</dimen>

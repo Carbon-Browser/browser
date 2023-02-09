@@ -66,7 +66,7 @@ public class SpeedDialDatabase {
         SharedPreferences.Editor editor = mPrefs.edit();
 
         // 10 speed dials by default
-        editor.putInt(SPEED_DIAL_COUNT_KEY, 14);
+        editor.putInt(SPEED_DIAL_COUNT_KEY, 8);
 
         int defaultCounter = 0;
         for (int i = 0; i != 14; i++) {
@@ -125,7 +125,7 @@ public class SpeedDialDatabase {
 
         List<SpeedDialDataItem> suggestions = new ArrayList<>();
 
-        int nSpeedDials = mPrefs.getInt(SPEED_DIAL_COUNT_KEY, 14);
+        int nSpeedDials = mPrefs.getInt(SPEED_DIAL_COUNT_KEY, 8);
 
         for (int i = 0; i != nSpeedDials; i++) {
             // User defined speed dial
@@ -207,7 +207,7 @@ public class SpeedDialDatabase {
 
         mSpeedDials.remove(position);
 
-        int nSpeedDials = mPrefs.getInt(SPEED_DIAL_COUNT_KEY, 10);
+        int nSpeedDials = mPrefs.getInt(SPEED_DIAL_COUNT_KEY, 8);
         editor.putInt(SPEED_DIAL_COUNT_KEY, (nSpeedDials - 1));
 
         // move all the speed dials after the deleted one down 1 position
@@ -223,7 +223,7 @@ public class SpeedDialDatabase {
     public void addSpeedDial(String title, String url) {
         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
-        int position = mPrefs.getInt(SPEED_DIAL_COUNT_KEY, 10);
+        int position = mPrefs.getInt(SPEED_DIAL_COUNT_KEY, 8);
 
         // add 1 to speed dial count
         SharedPreferences.Editor editor = mPrefs.edit();

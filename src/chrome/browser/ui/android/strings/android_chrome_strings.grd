@@ -5659,13 +5659,13 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
 
       <!-- SFB STRINGS -->
       <message name="IDS_VIEW_MORE_DAPPS" desc="">
-        View More DApps
+        VIEW MORE
       </message>
       <message name="IDS_COMING_SOON" desc="">
-        Coming Soon
+        COMING SOON
       </message>
       <message name="IDS_FEATURED_DAPS" desc="">
-        Featured DApps
+        FEATURED DAPPS
       </message>
 
       <message name="IDS_JOIN_TELEGRAM" desc="">
@@ -5734,11 +5734,8 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         General
       </message>
 
-      <message name="IDS_NTP_REWARDS_TITLE_START" desc="">
-        Your
-      </message>
-      <message name="IDS_NTP_REWARDS_TITLE_END" desc="">
-        Stats:
+      <message name="IDS_NTP_REWARDS_TITLE" desc="">
+        Your Carbon Stats
       </message>
       <message name="IDS_REWARDS_TOTAL" desc="">
         Total
