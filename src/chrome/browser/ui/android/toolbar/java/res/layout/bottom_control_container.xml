@@ -96,9 +96,9 @@
                     android:layout_weight="1" />
 
                 <org.chromium.ui.widget.ChromeImageButton
-                    android:id="@+id/rewards_button_bottom"
+                    android:id="@+id/settings_button_bottom"
                     android:scaleType="centerInside"
-                    android:src="@drawable/padded_adblock_button_background"
+                    android:src="@drawable/ic_settings_bottom"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription=""
                     style="@style/SplitToolbarButton"/>
