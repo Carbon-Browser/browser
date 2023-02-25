@@ -498,8 +498,6 @@ public final class AdblockController {
             }
         }
 
-        org.chromium.base.Log.i("cunt cunt ", " cunt fuck blocked cunt");
-
         if (wasBlocked) RewardsAPIBridge.getInstance().logAdBlocked();
     }
 

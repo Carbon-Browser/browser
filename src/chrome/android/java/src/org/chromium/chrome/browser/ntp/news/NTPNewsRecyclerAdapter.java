@@ -460,8 +460,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
             String articleDate = ((NewsDataObject) mData.get(position)).articleDate;
 
             publishDateTextView.setText(articleDate);
-        } catch (Exception ignore) {
-        org.chromium.base.Log.i("cuntcunt cunt", "fuck you "+ignore);}
+        } catch (Exception ignore) { }
     }
 
     // total number of rows
