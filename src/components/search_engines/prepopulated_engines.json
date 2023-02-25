@@ -123,6 +123,16 @@
       "id": 10
     },
 
+    "presearch": {
+      "name": "Presearch",
+      "keyword": "presearch.com",
+      "favicon_url": "https://presearch.com/favicon.ico",
+      "search_url": "https://presearch.com/search?q={searchTerms}",
+      "image_url_post_params": "imgurl={google:imageURL}",
+      "type": "SEARCH_ENGINE_PRESEARCH",
+      "id": 110
+    },
+
     "google": {
       "name": "Google",
       "keyword": "google.com",
