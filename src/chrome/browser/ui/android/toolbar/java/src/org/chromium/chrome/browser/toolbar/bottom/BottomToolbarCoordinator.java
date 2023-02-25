@@ -11,4 +11,6 @@ public interface BottomToolbarCoordinator {
     void openSpeedDialPopup(View v);
 
     void loadHomepage(View v);
+
+    void openSettings(View v);
 }

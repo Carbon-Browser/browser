@@ -215,6 +215,9 @@ import android.graphics.Color;
 
 import org.chromium.chrome.browser.toolbar.bottom.BottomToolbarThemeCommunicator;
 
+import org.chromium.components.browser_ui.settings.SettingsLauncher;
+import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
+
 import java.util.List;
 
 /**
@@ -1446,6 +1449,12 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         LoadUrlParams loadUrlParams = new LoadUrlParams(homepageUrl());
         ChromeActivity activity = (ChromeActivity)v.getContext();
         activity.getActivityTab().loadUrl(loadUrlParams);
+    }
+
+    @Override
+    public void openSettings(View v) {
+        SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
+        settingsLauncher.launchSettingsActivity(v.getContext());
     }
 
     @Override

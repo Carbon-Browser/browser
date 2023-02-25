@@ -79,6 +79,20 @@
                 <Space
                     android:layout_width="0dp"
                     android:layout_height="1dp"
+                    android:layout_weight="1"/>
+
+                <!-- <org.chromium.ui.widget.ChromeImageButton
+                    android:id="@+id/carbon_action_button"
+                    android:layout_width="70dp"
+                    android:layout_height="70dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_center_action_button"/> -->
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
                     android:layout_weight="1" />
 
                 <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton

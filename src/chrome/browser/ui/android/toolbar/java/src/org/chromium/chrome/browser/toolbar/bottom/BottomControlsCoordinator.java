@@ -66,6 +66,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     private ChromeImageButton mSearchAccelerator;
     // private ChromeImageButton mSpeedDialButton;
     private ChromeImageButton mHomeButton;
+    private ChromeImageButton mSettingsButton;
     private ChromeImageButton mRewardsButton;
     private ToggleTabStackButton mTabSwitcherButton;
     /** Used to know the Layout state. */
@@ -140,6 +141,14 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             mTabSwitcherButton.setTabCountProvider(tabCountProvider);
         }
 
+        mSettingsButton = root.findViewById(R.id.settings_button_bottom);
+        mSettingsButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                BottomToolbarCoordinator.openSettings(v);
+            }
+        });
+
         mHomeButton = root.findViewById(R.id.bottom_home_button);
         mHomeButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -157,16 +166,16 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             }
         });
 
-        mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
-        if (mRewardsButton != null) {
-            mRewardsButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    // do callback
-                    BottomToolbarCoordinator.openRewardsPopup(v);
-                }
-            });
-        }
+        // mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
+        // if (mRewardsButton != null) {
+        //     mRewardsButton.setOnClickListener(new View.OnClickListener() {
+        //         @Override
+        //         public void onClick(View v) {
+        //             // do callback
+        //             BottomToolbarCoordinator.openRewardsPopup(v);
+        //         }
+        //     });
+        // }
 
         // Set the visibility of BottomControls to false by default. Components within
         // BottomControls should update the visibility explicitly if needed.
