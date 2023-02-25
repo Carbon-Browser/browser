@@ -383,7 +383,7 @@ std::string BuildUserAgentFromOSAndProduct(const std::string& os_info,
   std::string user_agent;
   base::StringAppendF(&user_agent,
                       "Mozilla/5.0 (%s) AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "%s Safari/537.36",
+                      "%s Safari/537.36 Carbon",
                       os_info.c_str(), product.c_str());
   return user_agent;
 }
