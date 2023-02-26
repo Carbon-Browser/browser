@@ -5738,7 +5738,7 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         Your Carbon Stats
       </message>
       <message name="IDS_REWARDS_TOTAL" desc="">
-        Total
+        Earned Total
       </message>
       <message name="IDS_REWARDS_EARNED_TODAY" desc="">
         Earned today

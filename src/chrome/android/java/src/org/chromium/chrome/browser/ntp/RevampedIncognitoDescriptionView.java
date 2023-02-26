@@ -47,7 +47,7 @@ public class RevampedIncognitoDescriptionView
     private LinearLayout mDescriptionTextContainer;
     private LinearLayout mDoesLayout;
     private LinearLayout mDoesNotLayout;
-    private TextView mLearnMore;
+    // private TextView mLearnMore;
     private RelativeLayout mCookieControlsCard;
     private SwitchCompat mCookieControlsToggle;
     private ImageView mCookieControlsManagedIcon;
@@ -62,7 +62,7 @@ public class RevampedIncognitoDescriptionView
     @Override
     public void setLearnMoreOnclickListener(OnClickListener onClickListener) {
         // Adjust LearnMore text and add the callback for LearnMore link.
-        adjustLearnMore(onClickListener);
+        // adjustLearnMore(onClickListener);
     }
 
     @Override
@@ -103,7 +103,7 @@ public class RevampedIncognitoDescriptionView
                 findViewById(R.id.revamped_incognito_ntp_description_text_container);
         mDoesLayout = findViewById(R.id.revamped_incognito_ntp_does_layout);
         mDoesNotLayout = findViewById(R.id.revamped_incognito_ntp_does_not_layout);
-        mLearnMore = findViewById(R.id.revamped_incognito_ntp_learn_more);
+        // mLearnMore = findViewById(R.id.revamped_incognito_ntp_learn_more);
         mCookieControlsCard = findViewById(R.id.revamped_cookie_controls_card);
         mCookieControlsToggle = findViewById(R.id.revamped_cookie_controls_card_toggle);
         mCookieControlsManagedIcon = findViewById(R.id.revamped_cookie_controls_card_managed_icon);
@@ -236,35 +236,35 @@ public class RevampedIncognitoDescriptionView
         // text and the adjacent elements. So adjust the margin to be the difference between
         // targeted spacing and effective padding.
         int innerSpacing = (int) ((getContext().getResources().getDimensionPixelSize(
-                                           R.dimen.min_touch_target_size)
-                                          - mLearnMore.getTextSize())
+                                           R.dimen.min_touch_target_size))
+                                          // - mLearnMore.getTextSize())
                 / 2);
-        int learnMoreVerticalMargin =
-                mResources.getDimensionPixelSize(R.dimen.incognito_ntp_learn_more_vertical_spacing)
-                - innerSpacing;
+        // int learnMoreVerticalMargin =
+        //         mResources.getDimensionPixelSize(R.dimen.incognito_ntp_learn_more_vertical_spacing)
+        //         - innerSpacing;
 
-        LinearLayout.LayoutParams params = (LayoutParams) mLearnMore.getLayoutParams();
-        params.setMargins(0, learnMoreVerticalMargin, 0, learnMoreVerticalMargin);
+        // LinearLayout.LayoutParams params = (LayoutParams) mLearnMore.getLayoutParams();
+        // params.setMargins(0, learnMoreVerticalMargin, 0, learnMoreVerticalMargin);
 
         mContainer.setPadding(
                 paddingHorizontalPx, paddingVerticalPx, paddingHorizontalPx, paddingVerticalPx);
     }
 
     /** Populate LearnMore view. **/
-    private void adjustLearnMore(OnClickListener onClickListener) {
-        String text =
-                getContext().getResources().getString(R.string.revamped_incognito_ntp_learn_more);
-
-        // Make the text between the <a> tags to be clickable, blue, without underline.
-        SpanApplier.SpanInfo spanInfo = new SpanApplier.SpanInfo("<a>", "</a>",
-                new NoUnderlineClickableSpan(getContext(), R.color.default_text_color_link_light,
-                        onClickListener::onClick));
-
-        SpannableString formattedText = SpanApplier.applySpans(text, spanInfo);
-
-        mLearnMore.setText(formattedText);
-        mLearnMore.setMovementMethod(LinkMovementMethod.getInstance());
-    }
+    // private void adjustLearnMore(OnClickListener onClickListener) {
+    //     String text =
+    //             getContext().getResources().getString(R.string.revamped_incognito_ntp_learn_more);
+    //
+    //     // Make the text between the <a> tags to be clickable, blue, without underline.
+    //     SpanApplier.SpanInfo spanInfo = new SpanApplier.SpanInfo("<a>", "</a>",
+    //             new NoUnderlineClickableSpan(getContext(), R.color.default_text_color_link_light,
+    //                     onClickListener::onClick));
+    //
+    //     SpannableString formattedText = SpanApplier.applySpans(text, spanInfo);
+    //
+    //     mLearnMore.setText(formattedText);
+    //     mLearnMore.setMovementMethod(LinkMovementMethod.getInstance());
+    // }
 
     private boolean isNarrowScreen() {
         int wideLayoutThresholdPx =
