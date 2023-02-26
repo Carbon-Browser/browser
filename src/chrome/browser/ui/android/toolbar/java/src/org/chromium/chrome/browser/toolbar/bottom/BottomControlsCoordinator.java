@@ -238,6 +238,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
         ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
         ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
+        ApiCompatibilityUtils.setImageTintList(mSettingsButton, tint);
         ApiCompatibilityUtils.setImageTintList(mTabSwitcherButton, tint);
         mTabSwitcherButton.setBrandedColorScheme(isColorDark(color) ? BrandedColorScheme.DARK_BRANDED_THEME : BrandedColorScheme.LIGHT_BRANDED_THEME);
     }
