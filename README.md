@@ -1,4 +1,4 @@
-## SF-Browser-Chromium
+## Carbon Browser
 
 Fetch release branch with no history to save time ( add --depth 1 after clone)
 
@@ -9,7 +9,7 @@ Sync with branch heads and tags
     gclient sync --with_branch_heads --with_tags
 
 Rebrand strings by running lib/replace_strings.py script
-Search and replace "Google Super Fast Browser"/Google <ph name="APP_NAME">%1$s<ex> text, found in managing storage.
+Search and replace "Google Carbon Browser"/Google <ph name="APP_NAME">%1$s<ex> text, found in managing storage.
 
 Update string ids by running src/tools/grit/grit/extern/rebrand.py
 
