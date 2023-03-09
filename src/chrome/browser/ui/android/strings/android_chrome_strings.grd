@@ -5657,7 +5657,15 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
 
 
 
-      <!-- SFB STRINGS -->
+      <!-- Carbon STRINGS -->
+      <message name="IDS_FRE_START" desc="">
+        START
+      </message>
+      <message name="IDS_FRE_TOS_SHORT" desc="">
+        <ph name="BEGIN_TOS_LINK">&lt;TOS_LINK&gt;</ph>Privacy Policy<ph name="END_TOS_LINK">&lt;/TOS_LINK&gt;</ph>, <ph name="BEGIN_ATOS_LINK">&lt;ATOS_LINK&gt;</ph>Terms of Usage<ph name="END_ATOS_LINK">&lt;/ATOS_LINK&gt;</ph>
+      </message>
+
+
       <message name="IDS_VIEW_MORE_DAPPS" desc="">
         VIEW MORE
       </message>
