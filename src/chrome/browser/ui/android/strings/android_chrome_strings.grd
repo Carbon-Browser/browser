@@ -5665,6 +5665,30 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         <ph name="BEGIN_TOS_LINK">&lt;TOS_LINK&gt;</ph>Privacy Policy<ph name="END_TOS_LINK">&lt;/TOS_LINK&gt;</ph>, <ph name="BEGIN_ATOS_LINK">&lt;ATOS_LINK&gt;</ph>Terms of Usage<ph name="END_ATOS_LINK">&lt;/ATOS_LINK&gt;</ph>
       </message>
 
+      <message name="IDS_FRE_BUTTON_NEXT" desc="">
+        NEXT
+      </message>
+
+      <message name="IDS_FRE_TITLE_PRIVACY" desc="">
+        Privacy
+      </message>
+      <message name="IDS_FRE_MESSAGE_PRIVACY" desc="">
+        Saves data be downloading ad-blocking filterins only when you’re connected to WI-FI. When toggled on, this setting may affect the quality of ad blocking.
+      </message>
+      <message name="IDS_FRE_TITLE_SPEED" desc="">
+        Speed
+      </message>
+      <message name="IDS_FRE_MESSAGE_SPEED" desc="">
+        Like VPN, AdBlock etc.ing ad-blocking filterins only when you’re connected to WI-FI. When toggled on, this setting may affect the quality of ad blocking.
+      </message>
+      <message name="IDS_FRE_TITLE_REWARDS" desc="">
+        Rewards
+      </message>
+      <message name="IDS_FRE_MESSAGE_REWARDS" desc="">
+        We want to give back to our loyal users. Earn CSIX tokens that you can use to spend on our partner network, upgrade to our premium browser experience, Carbon Pro and use on our upcoming self-serve ad marketplace, Carbon AdX. The more you browse with Carbon, the more tokens you earn!
+      </message>
+
+
 
       <message name="IDS_VIEW_MORE_DAPPS" desc="">
         VIEW MORE
