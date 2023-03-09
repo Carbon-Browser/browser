@@ -6,7 +6,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#282729"
+    android:background="#1E1E1E"
     tools:ignore="ContentDescription"
     android:paddingStart="@dimen/fre_content_margin"
     android:paddingEnd="@dimen/fre_content_margin"
@@ -28,42 +28,58 @@
                 android:layout_width="wrap_content"
                 android:layout_height="@dimen/fre_image_height"
                 tools:ignore="ContentDescription"
+                android:layout_marginTop="30dp"
+                android:layout_marginBottom="20dp"
+                android:src="@drawable/logo_carbon_text" />
+
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="200dp"
+                tools:ignore="ContentDescription"
                 android:layout_marginTop="56dp"
-                android:src="@drawable/ic_reward_promo" />
+                android:src="@drawable/illustration_launch_privacy" />
 
-            <!-- title -->
+            <Space
+                android:layout_height="0dp"
+                android:layout_width="1dp"
+                android:layout_weight="1"/>
+
             <TextView
-                android:layout_width="wrap_content"
+                android:text="@string/fre_title_privacy"
                 android:layout_height="wrap_content"
-                android:gravity="center"
+                android:layout_width="wrap_content"
+                android:fontFamily="sans-serif"
+                android:textSize="24sp"
                 android:textColor="#ffffff"
-                android:layout_marginTop="@dimen/fre_vertical_spacing_small"
                 android:textStyle="bold"
-                android:textSize="15sp"
-                android:text="@string/reward_on_boarding_message_title"/>
+                android:layout_marginTop="80dp"
+              />
 
-            <!-- message -->
             <TextView
-                android:layout_width="wrap_content"
+                android:text="@string/fre_message_privacy"
                 android:layout_height="wrap_content"
+                android:layout_width="wrap_content"
+                android:textSize="14sp"
                 android:gravity="center"
-                android:textColor="#ffffff"
-                android:layout_marginTop="@dimen/fre_vertical_spacing_small"
-                android:text="@string/reward_on_boarding_message"/>
+                android:fontFamily="sans-serif"
+                android:textColor="#808080"
+                android:layout_marginTop="16dp"
+              />
+
         </LinearLayout>
     </FrameLayout>
 
     <!--suppress ButtonStyle -->
-    <org.chromium.ui.widget.ButtonCompat
+    <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_primary"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:layout_marginBottom="40dp"
+        android:layout_marginBottom="60dp"
+        android:textSize="20sp"
         android:paddingStart="@dimen/fre_button_padding"
         android:paddingEnd="@dimen/fre_button_padding"
-        android:text="@string/ok"
-        android:textColor="@android:color/white"
-        style="@style/FilledButton.Flat" />
+        android:text="@string/fre_button_next"
+        android:background="@android:color/transparent" />
 
 </LinearLayout>

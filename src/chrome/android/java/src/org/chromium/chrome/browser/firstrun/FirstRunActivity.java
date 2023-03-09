@@ -204,18 +204,16 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
 
         // set default
         mPages.add(new FirstRunPage<>(
-                DefaultBrowserFreFragment.class, alwaysTrue));
-        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_DEFAULT_BROWSER);
+                PrivacyOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_PRIVACY);
 
-        // adblock on-boarding message
         mPages.add(new FirstRunPage<>(
-                AdblockOnBoardingMessageFragment.class, alwaysTrue));
-        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_ADBLOCK_ONBOARDING_MESSAGE_SHOWN);
+                SpeedOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_SPEED);
 
-        // adblock on-boarding message
         mPages.add(new FirstRunPage<>(
-                RewardOnBoardingMessageFragment.class, alwaysTrue));
-        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_REWARD_ONBOARDING_MESSAGE_SHOWN);
+                RewardsOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_REWARDS);
 
         if (mPagerAdapter != null) {
             mPagerAdapter.notifyDataSetChanged();

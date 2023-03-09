@@ -16,26 +16,26 @@ import android.widget.TextView;
 import androidx.fragment.app.Fragment;
 
 import org.chromium.chrome.R;
-import org.chromium.ui.text.SpanApplier;
-import org.chromium.ui.text.SpanApplier.SpanInfo;
+
+import android.graphics.Color;
+import android.graphics.Shader;
+import android.graphics.LinearGradient;
 
 /** A {@link Fragment} that presents a set of search engines for the user to choose from. */
-public class AdblockOnBoardingMessageFragment extends Fragment implements FirstRunFragment {
+public class SpeedOnboardingMessageFragment extends Fragment implements FirstRunFragment {
 
     @Override
     public View onCreateView(
             LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View rootView = inflater.inflate(
-                R.layout.adblock_first_run_fragment, container, false);
-
-        StyleSpan boldSpan = new StyleSpan(android.graphics.Typeface.BOLD);
-        TextView instructionsTextView = (TextView) rootView.findViewById(R.id.adblock_message_instructions);
-        SpannableString description = SpanApplier.applySpans(
-                getContext().getString(R.string.adblock_on_boarding_message_instructions),
-                new SpanInfo("<b>", "</b>", boldSpan));
-        instructionsTextView.setText(description);
+                R.layout.speed_first_run_fragment, container, false);
 
         Button mButton = (Button) rootView.findViewById(R.id.button_primary);
+        // set start button gradient
+        Shader textShader = new LinearGradient(0, 0, 160, 0,
+            new int[]{Color.parseColor("#FF320A"),Color.parseColor("#FF9133")},
+           null, Shader.TileMode.CLAMP);
+        mButton.getPaint().setShader(textShader);
         mButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
