@@ -414,7 +414,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mViewMoreDappsBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://magic.store/apps");
+                loadUrl("https://carbon.website/app-store/");
             }
         });
     }
