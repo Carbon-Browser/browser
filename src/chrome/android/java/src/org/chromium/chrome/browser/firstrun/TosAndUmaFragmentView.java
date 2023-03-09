@@ -37,7 +37,6 @@ public class TosAndUmaFragmentView extends RelativeLayout {
     // in its place when waiting for C++ to load before processing the FRE screen.
     private View mBottomGroup;
 
-    private View mTitle;
     private View mLogo;
     private View mLoadingSpinnerContainer;
     private View mPrivacyDisclaimer;
@@ -82,7 +81,6 @@ public class TosAndUmaFragmentView extends RelativeLayout {
         mContentWrapper = findViewById(R.id.fre_content_wrapper);
         mBottomGroup = findViewById(R.id.fre_bottom_group);
 
-        mTitle = findViewById(R.id.title);
         mLogo = findViewById(R.id.image);
         mLoadingSpinnerContainer = findViewById(R.id.loading_view_container);
         mPrivacyDisclaimer = findViewById(R.id.privacy_disclaimer);
@@ -143,7 +141,6 @@ public class TosAndUmaFragmentView extends RelativeLayout {
                     mTitleAndContent.getPaddingEnd(), mTitleAndContent.getPaddingBottom());
 
             setLogoLayoutParams(useWideScreenLayout, height);
-            setTitleLayoutParams(useWideScreenLayout);
             setSpinnerLayoutParams(useWideScreenLayout, width, height);
 
             setContentLayoutParams(useWideScreenLayout);
@@ -287,12 +284,6 @@ public class TosAndUmaFragmentView extends RelativeLayout {
                     Math.max(mVerticalSpacing, (height / 2 - freImageHeight - mHeadlineSize));
             logoLayoutParams.gravity = Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM;
         }
-    }
-
-    private void setTitleLayoutParams(boolean useWideScreen) {
-        LinearLayout.LayoutParams titleParams =
-                (LinearLayout.LayoutParams) mTitle.getLayoutParams();
-        titleParams.gravity = useWideScreen ? Gravity.START : Gravity.CENTER;
     }
 
     private void setContentLayoutParams(boolean useWideScreen) {

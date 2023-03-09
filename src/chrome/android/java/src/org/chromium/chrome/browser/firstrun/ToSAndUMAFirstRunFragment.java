@@ -44,6 +44,8 @@ import android.net.Uri;
 import org.chromium.chrome.browser.device.DeviceClassManager;
 import android.widget.ImageView;
 import android.graphics.Color;
+import android.graphics.Shader;
+import android.graphics.LinearGradient;
 
 /**
  * The First Run Experience fragment that allows the user to accept Terms of Service ("ToS") and
@@ -74,7 +76,6 @@ public class ToSAndUMAFirstRunFragment
     private Button mAcceptButton;
     private CheckBox mSendReportCheckBox;
     private TextView mTosAndPrivacy;
-    private View mTitle;
     private View mProgressSpinner;
 
     private long mTosAcceptedTime;
@@ -108,12 +109,17 @@ public class ToSAndUMAFirstRunFragment
         noAnimSpacerTop = view.findViewById(R.id.fre_spacer_top);
         noAnimSpacerBottom = view.findViewById(R.id.fre_spacer_bottom);
 
-        mTitle = view.findViewById(R.id.title);
         mProgressSpinner = view.findViewById(R.id.progress_spinner);
         mProgressSpinner.setVisibility(View.GONE);
         mAcceptButton = (Button) view.findViewById(R.id.terms_accept);
         mSendReportCheckBox = (CheckBox) view.findViewById(R.id.send_report_checkbox);
         mTosAndPrivacy = (TextView) view.findViewById(R.id.tos_and_privacy);
+
+        // set start button gradient
+        Shader textShader = new LinearGradient(0, 0, 330, 0,
+            new int[]{Color.parseColor("#FF320A"),Color.parseColor("#FF9133")},
+           null, Shader.TileMode.CLAMP);
+        mAcceptButton.getPaint().setShader(textShader);
 
         // Register event listeners.
         mAcceptButton.setOnClickListener((v) -> onTosButtonClicked());
@@ -126,12 +132,12 @@ public class ToSAndUMAFirstRunFragment
         // Intro animation
         surfaceView = (SurfaceView) view.findViewById(R.id.fre_surface_view);
         surfaceView.getHolder().addCallback(this);
-        if (DeviceClassManager.enableAnimations()) {
-            setupMediaPlayer();
-        } else {
+        // if (DeviceClassManager.enableAnimations()) {
+        //     setupMediaPlayer();
+        // } else {
             setAnimationDisabled();
-        }
-        getActivity().getWindow().setNavigationBarColor(Color.parseColor("#282729"));
+        // }
+        getActivity().getWindow().setNavigationBarColor(Color.parseColor("#1E1E1E"));
 
         updateView();
 
@@ -152,16 +158,11 @@ public class ToSAndUMAFirstRunFragment
     @Override
     public void setInitialA11yFocus() {
         // Ignore calls before view is created.
-        if (mTitle == null) return;
-        mTitle.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
     }
 
     @Override
     public void setUserVisibleHint(boolean isVisibleToUser) {
         super.setUserVisibleHint(isVisibleToUser);
-
-        // This may be called before onViewCreated(), in which case the below is not yet relevant.
-        if (mTitle == null) return;
 
         if (!isVisibleToUser) {
             // Restore original enabled & visibility states, in case the user returns to the page.
@@ -292,7 +293,7 @@ public class ToSAndUMAFirstRunFragment
             }
         } else {
             tosString = getString(//hasChildAccount ? R.string.fre_tos_and_privacy_child_account :
-                                                   R.string.fre_tos);
+                                                   R.string.fre_tos_short);
         }
 
         mTosAndPrivacy.setText(SpanApplier.applySpans(tosString, spans.toArray(new SpanInfo[0])));
@@ -374,7 +375,6 @@ public class ToSAndUMAFirstRunFragment
         boolean otherElementVisible = !spinnerVisible;
 
         setTosAndUmaVisible(otherElementVisible);
-        mTitle.setVisibility(otherElementVisible ? View.VISIBLE : View.INVISIBLE);
         mProgressSpinner.setVisibility(spinnerVisible ? View.VISIBLE : View.GONE);
     }
 
@@ -451,7 +451,6 @@ public class ToSAndUMAFirstRunFragment
         mAcceptButton.setVisibility(View.VISIBLE);
         mTosAndPrivacy.setVisibility(View.VISIBLE);
         mLogoImageView.setVisibility(View.VISIBLE);
-        mTitle.setVisibility(View.VISIBLE);
         noAnimSpacerTop.setVisibility(View.VISIBLE);
         noAnimSpacerBottom.setVisibility(View.VISIBLE);
         updateParams(false);
@@ -492,20 +491,15 @@ public class ToSAndUMAFirstRunFragment
            }
            surfaceView.setLayoutParams(lp);
         }
-        // set terms and conditions text position before making visibile
-        ViewGroup.MarginLayoutParams mTosAndPrivacyParams = (ViewGroup.MarginLayoutParams) mTosAndPrivacy.getLayoutParams();
-        int margin = getResources().getDimensionPixelSize(R.dimen.fre_content_margin);
-        mTosAndPrivacyParams.setMargins(margin, margin, 0, screenHeight / 5);
-        mTosAndPrivacy.setLayoutParams(mTosAndPrivacyParams);
      }
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         if (player == null) {
-            if (DeviceClassManager.enableAnimations()) {
-                setupMediaPlayer();
-            } else {
+            // if (DeviceClassManager.enableAnimations()) {
+            //     setupMediaPlayer();
+            // } else {
                 setAnimationDisabled();
-            }
+            // }
         }
         try {
             player.setDisplay(holder);
