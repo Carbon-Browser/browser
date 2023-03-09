@@ -5673,13 +5673,14 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         Privacy
       </message>
       <message name="IDS_FRE_MESSAGE_PRIVACY" desc="">
-        Saves data be downloading ad-blocking filterins only when you’re connected to WI-FI. When toggled on, this setting may affect the quality of ad blocking.
+        Carbon is a decentralized web3 browser with 100% privacy!
+
       </message>
       <message name="IDS_FRE_TITLE_SPEED" desc="">
         Speed
       </message>
       <message name="IDS_FRE_MESSAGE_SPEED" desc="">
-        Like VPN, AdBlock etc.ing ad-blocking filterins only when you’re connected to WI-FI. When toggled on, this setting may affect the quality of ad blocking.
+        Carbon loads webpage 3x as fast saving you time!
       </message>
       <message name="IDS_FRE_TITLE_REWARDS" desc="">
         Rewards
