@@ -43,11 +43,11 @@ import android.widget.LinearLayout;
 import android.widget.Button;
 import android.content.Intent;
 import org.chromium.base.IntentUtils;
-import android.widget.PopupWindow;
 import android.os.Handler;
 import android.os.Looper;
 import java.lang.Runnable;
 import androidx.appcompat.widget.AppCompatImageButton;
+import org.chromium.chrome.browser.rewards.RewardsCommunicator;
 import android.graphics.Color;
 
 public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecyclerAdapter.ViewHolder> implements RewardsAPIBridge.RewardsAPIBridgeCommunicator {
@@ -59,11 +59,10 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
 
     private TextView mErrorMessageTextView;
     private LinearLayout mLoadingIndicator;
-    private PopupWindow mPopup;
     private RewardsCommunicator mRewardsCommunicator;
 
     // data is passed into the constructor
-    public RewardsRecyclerAdapter(Context context, LinearLayout loadingIndicator, TextView errorMessageTextView, PopupWindow popup, RewardsCommunicator communicator) {
+    public RewardsRecyclerAdapter(Context context, LinearLayout loadingIndicator, TextView errorMessageTextView, RewardsCommunicator communicator) {
         this.mInflater = LayoutInflater.from(context);
 
         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
@@ -72,7 +71,6 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
 
         mLoadingIndicator = loadingIndicator;
         mErrorMessageTextView = errorMessageTextView;
-        mPopup = popup;
 
         RewardsAPIBridge.getInstance().getAllRewards(this);
     }
@@ -142,10 +140,14 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
             });
 
         TextView mRewardMonetary = view.findViewById(R.id.reward_monetary_value);
+        TextView mRewardMonetary2 = view.findViewById(R.id.reward_monetary_value2);
 
         String rewardPointsString = mRewardObject.valueDollar + " $CSIX";
         if (mRewardObject.valueDollar < mRewardObject.valuePoints) {
-            rewardPointsString = "$" + mRewardObject.valueDollar + " in $CSIX";
+
+            rewardPointsString = "$" + mRewardObject.valueDollar;
+
+            mRewardMonetary2.setText("in $CSIX");
         }
 
         mRewardMonetary.setText(rewardPointsString);
@@ -153,19 +155,19 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
         TextView mRewardName = view.findViewById(R.id.reward_name);
         mRewardName.setText(mRewardObject.name);
 
-        if (mRewardObject.name.equals("Carbon PRO (6mo)")) {
-            AppCompatImageButton mProHelpBtn = view.findViewById(R.id.pro_help_btn);
-            mProHelpBtn.setVisibility(View.VISIBLE);
-
-            mProHelpBtn.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    mRewardsCommunicator.loadRewardsUrl("https://carbon.website/#pro", view);
-
-                    mPopup.dismiss();
-                }
-            });
-        }
+        // if (mRewardObject.name.equals("Carbon PRO (6mo)")) {
+        //     AppCompatImageButton mProHelpBtn = view.findViewById(R.id.pro_help_btn);
+        //     mProHelpBtn.setVisibility(View.VISIBLE);
+        //
+        //     mProHelpBtn.setOnClickListener(new View.OnClickListener() {
+        //         @Override
+        //         public void onClick(View view) {
+        //             mRewardsCommunicator.loadRewardsUrl("https://carbon.website/#pro", view);
+        //
+        //             // TODO close menu
+        //         }
+        //     });
+        // }
 
         LinearLayout mRedeemButton = view.findViewById(R.id.reward_redeem_button);
         if (RewardsAPIBridge.getInstance().getTotalCreditBalance() < mRewardObject.valuePoints) {
@@ -185,7 +187,7 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
 
                 IntentUtils.safeStartActivity(view.getContext(), intent);
 
-                mPopup.dismiss();
+                // TODO close menu
             }
         });
     }

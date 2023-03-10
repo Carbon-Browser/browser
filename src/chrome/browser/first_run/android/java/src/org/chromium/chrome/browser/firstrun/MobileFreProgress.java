@@ -27,9 +27,9 @@ import java.lang.annotation.RetentionPolicy;
         MobileFreProgress.WELCOME_SIGNIN_WITH_NON_DEFAULT_ACCOUNT,
         MobileFreProgress.WELCOME_DISMISS,
         MobileFreProgress.SYNC_CONSENT_SETTINGS_LINK_CLICK,
-        MobileFreProgress.FRE_PROGRESS_DEFAULT_BROWSER,
-        MobileFreProgress.FRE_PROGRESS_ADBLOCK_ONBOARDING_MESSAGE_SHOWN,
-        MobileFreProgress.FRE_PROGRESS_REWARD_ONBOARDING_MESSAGE_SHOWN,
+        MobileFreProgress.FRE_PROGRESS_PRIVACY,
+        MobileFreProgress.FRE_PROGRESS_SPEED,
+        MobileFreProgress.FRE_PROGRESS_REWARDS,
         MobileFreProgress.MAX,
 })
 @Retention(RetentionPolicy.SOURCE)
@@ -53,8 +53,8 @@ public @interface MobileFreProgress {
     int WELCOME_DISMISS = 10;
     /** The user clicked on the |settings| link on sync consent screen. */
     int SYNC_CONSENT_SETTINGS_LINK_CLICK = 11;
-    int FRE_PROGRESS_DEFAULT_BROWSER = 12;
-    int FRE_PROGRESS_ADBLOCK_ONBOARDING_MESSAGE_SHOWN = 13;
-    int FRE_PROGRESS_REWARD_ONBOARDING_MESSAGE_SHOWN = 14;
+    int FRE_PROGRESS_PRIVACY = 12;
+    int FRE_PROGRESS_SPEED = 13;
+    int FRE_PROGRESS_REWARDS = 14;
     int MAX = 15;
 }
