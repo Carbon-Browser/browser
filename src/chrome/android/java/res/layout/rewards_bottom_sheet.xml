@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2022 The Chromium Authors. All rights reserved.
+     Use of this source code is governed by a BSD-style license that can be
+     found in the LICENSE file. -->
+
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_height="wrap_content"
+    android:layout_width="match_parent"
+    android:orientation="vertical">
+
+    <!-- TODO(crbug.com/1330900): check if it's really right to duplicate this from other
+    sheets? -->
+    <ImageView
+        android:id="@+id/drag_handlebar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginStart="@dimen/website_approval_horizontal_margin"
+        android:layout_marginEnd="@dimen/website_approval_horizontal_margin"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="24dp"
+        android:importantForAccessibility="no"
+        app:srcCompat="@drawable/drag_handlebar" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:importantForAccessibility="no"
+        android:textSize="18sp"
+        android:text="@string/bottom_sheet_title_rewards"
+        android:textColor="#ffffff"/>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:gravity="center"
+        android:layout_marginTop="7dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:importantForAccessibility="no"
+            android:textSize="12sp"
+            android:text="@string/bottom_sheet_teaser_1"
+            android:textColor="#808080"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:importantForAccessibility="no"
+            android:textSize="12sp"
+            android:layout_marginStart="1.5dp"
+            android:text="@string/bottom_sheet_teaser_2"
+            android:textColor="#FF7929"/>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/bottom_sheet_rewards_balance"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:importantForAccessibility="no"
+        android:layout_marginTop="7dp"
+        android:layout_marginBottom="28dp"
+        android:textSize="25sp"/>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:id="@+id/reward_loading_container"
+                android:orientation="vertical"
+                android:layout_gravity="center"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <ImageView
+                    android:id="@+id/reward_loading"
+                    android:layout_marginTop="60dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerHorizontal="true"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:textStyle="italic"
+                    android:gravity="center"
+                    android:layout_gravity="center_horizontal"
+                    android:textColor="@android:color/white"
+                    android:text="@string/rewards_loading"
+                    android:layout_centerHorizontal="true"/>
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/reward_error_message"
+                android:textSize="16sp"
+                android:gravity="center"
+                android:layout_marginTop="210dp"
+                android:layout_gravity="center_horizontal"
+                android:text="@string/rewards_error_message"
+                android:textColor="@android:color/white"
+                android:visibility="gone"
+                android:layout_centerHorizontal="true"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rewards_recyclerview"
+                android:layout_height="wrap_content"
+                android:layout_width="match_parent"
+                android:paddingStart="30dp"
+                android:paddingEnd="30dp"
+                android:minHeight="200dp"/>
+        </FrameLayout>
+</LinearLayout>

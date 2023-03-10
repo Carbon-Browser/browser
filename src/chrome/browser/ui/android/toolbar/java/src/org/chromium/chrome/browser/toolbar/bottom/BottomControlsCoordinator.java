@@ -166,16 +166,16 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             }
         });
 
-        // mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
-        // if (mRewardsButton != null) {
-        //     mRewardsButton.setOnClickListener(new View.OnClickListener() {
-        //         @Override
-        //         public void onClick(View v) {
-        //             // do callback
-        //             BottomToolbarCoordinator.openRewardsPopup(v);
-        //         }
-        //     });
-        // }
+        mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
+        if (mRewardsButton != null) {
+            mRewardsButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    // do callback
+                    BottomToolbarCoordinator.openRewardsPopup(v);
+                }
+            });
+        }
 
         // Set the visibility of BottomControls to false by default. Components within
         // BottomControls should update the visibility explicitly if needed.

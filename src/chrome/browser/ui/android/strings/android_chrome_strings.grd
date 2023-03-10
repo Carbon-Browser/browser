@@ -5690,6 +5690,17 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       </message>
 
 
+      <message name="IDS_BOTTOM_SHEET_TITLE_REWARDS" desc="">
+        Your Reward Balance
+      </message>
+      <message name="IDS_BOTTOM_SHEET_TEASER_1" desc="">
+        Daily $CSIX rewards while you browse
+      </message>
+      <message name="IDS_BOTTOM_SHEET_TEASER_2" desc="">
+        coming soon
+      </message>
+      
+
 
       <message name="IDS_VIEW_MORE_DAPPS" desc="">
         VIEW MORE

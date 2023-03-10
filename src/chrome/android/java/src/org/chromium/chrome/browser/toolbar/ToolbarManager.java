@@ -178,7 +178,6 @@ import org.chromium.url.GURL;
 import org.chromium.base.ApiCompatibilityUtils;
 import android.view.WindowManager;
 import android.os.Build;
-import android.widget.PopupWindow;
 import android.view.LayoutInflater;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -186,9 +185,7 @@ import android.widget.CompoundButton;
 import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
 import org.chromium.chrome.browser.rewards.RewardsCommunicator;
-import org.chromium.chrome.browser.rewards.RewardsRecyclerAdapter;
 import org.chromium.ui.widget.ChromeImageButton;
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import android.widget.ImageView;
 import com.bumptech.glide.request.target.DrawableImageViewTarget;
@@ -219,6 +216,8 @@ import org.chromium.components.browser_ui.settings.SettingsLauncher;
 import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
 
 import java.util.List;
+
+import org.chromium.chrome.browser.rewards.RewardsBottomSheetCoordinator;
 
 /**
  * Contains logic for managing the toolbar visual component.  This class manages the interactions
@@ -303,6 +302,8 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
     private final TabCreatorManager mTabCreatorManager;
     private final SnackbarManager mSnackbarManager;
     private final OneshotSupplier<TabReparentingController> mTabReparentingControllerSupplier;
+
+    private RewardsBottomSheetCoordinator mRewardsBottomSheetCoordinator;
 
     private HomeButtonCoordinator mHomeButtonCoordinator;
     private ToggleTabStackButtonCoordinator mToggleTabStackButtonCoordinator;
@@ -499,6 +500,8 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         mSnackbarManager = snackbarManager;
         mTabReparentingControllerSupplier = tabReparentingControllerSupplier;
         mEphemeralTabCoordinatorSupplier = ephemeralTabCoordinatorSupplier;
+
+        mRewardsBottomSheetCoordinator = new RewardsBottomSheetCoordinator(mWindowAndroid, (RewardsCommunicator) this);
 
         mIsProgressBarVisibleSupplier.set(!VrModuleProvider.getDelegate().isInVr());
         mVrModeObserver = new VrModeObserver() {
@@ -1445,6 +1448,13 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
     // }
 
     @Override
+    public void loadUrl(String url, View v) {
+        LoadUrlParams loadUrlParams = new LoadUrlParams(url);
+        ChromeActivity activity = (ChromeActivity)v.getContext();
+        activity.getActivityTab().loadUrl(loadUrlParams);
+    }
+
+    @Override
     public void loadHomepage(View v) {
         LoadUrlParams loadUrlParams = new LoadUrlParams(homepageUrl());
         ChromeActivity activity = (ChromeActivity)v.getContext();
@@ -1453,8 +1463,9 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
     @Override
     public void openSettings(View v) {
-        SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
-        settingsLauncher.launchSettingsActivity(v.getContext());
+        // SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
+        // settingsLauncher.launchSettingsActivity(v.getContext());
+        showRewardsPopup(v);
     }
 
     @Override
@@ -1542,122 +1553,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
     }
 
     private void showRewardsPopup(View v) {
-        PopupWindow mPopup = new PopupWindow(v.getContext());
-        mPopup.setFocusable(true);
-        mPopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // The window layout type affects the z-index of the popup window on M+.
-            mPopup.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
-        }
-
-        mPopup.setBackgroundDrawable(ApiCompatibilityUtils.getDrawable(
-            v.getContext().getResources(), R.drawable.popup_bg));
-
-        Rect bgPadding = new Rect();
-        mPopup.getBackground().getPadding(bgPadding);
-
-        android.widget.ScrollView contentView =
-                (android.widget.ScrollView) LayoutInflater.from(v.getContext()).inflate(R.layout.rewards_popup, null);
-
-        TextView mRewardsTotal = contentView.findViewById(R.id.rewards_popup_total);
-        mRewardsTotal.setText(mRewardsBridge.getTotalCreditBalance() + " $CSIX");
-
-        TextView mRewardErrorMessage = contentView.findViewById(R.id.reward_error_message);
-
-        LinearLayout mLoadingIndicatorContainer = contentView.findViewById(R.id.reward_loading_container);
-        ImageView mLoadingIndicator = contentView.findViewById(R.id.reward_loading);
-        Glide.with(contentView.getContext())
-            // .load("https://sigmawolf.io/android-resources/images/rewards_loading.gif")
-            .load("http://qnni7t2n4hc7770iq8npfli8u4.ingress.europlots.com/wp-content/uploads/2022/12/loading.gif")
-            .thumbnail(0.05f)
-            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-            .into(new DrawableImageViewTarget(mLoadingIndicator));
-
-        RecyclerView mRewardsRecyclerView = contentView.findViewById(R.id.rewards_recyclerview);
-        mRewardsRecyclerView.setLayoutManager(new LinearLayoutManager(v.getContext()));
-        mRewardsRecyclerView.setAdapter(new RewardsRecyclerAdapter(v.getContext(), mLoadingIndicatorContainer, mRewardErrorMessage, mPopup, this));
-
-        int menuWidth = v.getContext().getResources().getDimensionPixelSize(R.dimen.rewards_popup_width);
-        int popupWidth = menuWidth + bgPadding.left + bgPadding.right;
-        mPopup.setWidth(popupWidth);
-
-        /*Display display = mActivity.getWindowManager().getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        contentView.measure(size.x, size.y);*/
-        int menuHeight = contentView.getMeasuredHeight();
-
-        mPopup.setAnimationStyle(R.style.RewardsPopupAnimation);
-
-        String url = "";
-        final Tab currentTab = mTabModelSelector.getCurrentTab();
-        if (currentTab != null && currentTab.getWebContents() != null
-                && !TextUtils.isEmpty(currentTab.getUrl().getSpec())) {
-
-              url = currentTab.getUrl().getSpec();
-
-              TextView websiteTitle = contentView.findViewById(R.id.adblock_webisite_title);
-              websiteTitle.setText(url);
-        }
-
-        URL domain = null;
-        try {
-            domain = new URL(url);
-        } catch (Exception e) { }
-
-        final String mCurrentUrl = domain != null ? domain.getHost() : "";
-
-        // help btn
-        AppCompatImageButton mHelpButton = contentView.findViewById(R.id.rewards_help);
-        mHelpButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (v.getContext() instanceof ChromeActivity) {
-                    LoadUrlParams loadUrlParams = new LoadUrlParams("https://carbon.website/#rewards");
-                    ChromeActivity activity = (ChromeActivity)v.getContext();
-                    activity.getActivityTab().loadUrl(loadUrlParams);
-                }
-
-                mPopup.dismiss();
-            }
-        });
-
-        // switch
-        Switch mAdblockSwitch = contentView.findViewById(R.id.adblock_switch);
-        mAdblockSwitch.setChecked(AdblockController.getInstance().isEnabled() &&
-                !AdblockController.getInstance().getAllowedDomains().contains(mCurrentUrl));
-        mAdblockSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
-                List<String> mAllowedDomains = AdblockController.getInstance().getAllowedDomains();
-                boolean isDomainAllowed = mAllowedDomains.contains(mCurrentUrl);
-
-                // adblock master not enabled, re-enable
-                AdblockController.getInstance().setEnabled(!AdblockController.getInstance().isEnabled());
-
-                // domain not allowed, allow - vice versa
-                if (isDomainAllowed) {
-                    AdblockController.getInstance().removeAllowedDomain(mCurrentUrl);
-                } else {
-                    AdblockController.getInstance().addAllowedDomain(mCurrentUrl);
-                }
-
-                if (currentTab != null) currentTab.reload();
-
-                mPopup.dismiss();
-            }
-        });
-
-        int[] location = new int[2];
-        v.getLocationInWindow(location);
-        int shadowHeight = (int) (v.getContext().getResources().getDimensionPixelSize(R.dimen.toolbar_shadow_height) * 1.2);
-
-        mPopup.setContentView(contentView);
-        try {
-            mPopup.showAtLocation(mActivity.findViewById(R.id.bottom_controls),
-                    Gravity.NO_GRAVITY, location[0], (location[1] - menuHeight));
-        } catch (Exception ignore) {}
+        mRewardsBottomSheetCoordinator.show();
     }
 
     /**
