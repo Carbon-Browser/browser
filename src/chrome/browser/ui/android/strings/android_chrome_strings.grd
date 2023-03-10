@@ -1909,13 +1909,13 @@ Your Google account may have other forms of browsing history like searches and a
         Carbon Browser &amp; Carbon BrowserOS Additional Terms of Service
       </message>
       <message name="IDS_CHROME_ADDITIONAL_TERMS_OF_SERVICE_URL" desc="URL for Carbon Browser and Carbon BrowserOS additional terms of service" translateable="false">
-        https://carbon.website/privacy-policy-2/
+        https://carbon.website/privacy-policy/
       </message>
       <message name="IDS_PRIVACY_POLICY_TITLE" desc="Title for the Google privacy policy">
         Google Privacy Policy
       </message>
       <message name="IDS_GOOGLE_PRIVACY_POLICY_URL" desc="URL for the Google privacy policy" translateable="false">
-        https://carbon.website/privacy-policy-2/
+        https://carbon.website/privacy-policy/
       </message>
 
       <!-- Sign-in strings -->
