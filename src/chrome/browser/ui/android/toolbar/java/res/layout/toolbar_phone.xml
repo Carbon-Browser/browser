@@ -40,14 +40,14 @@
         android:focusable="true"
         android:focusableInTouchMode="true">
 
-        <org.chromium.ui.widget.ChromeImageButton
+        <!-- <org.chromium.ui.widget.ChromeImageButton
             android:id="@+id/rewards_button"
             android:scaleType="centerInside"
             android:elevation="12dp"
             android:background="@drawable/padded_adblock_button_background"
             android:contentDescription=""
             android:visibility="gone"
-            style="@style/SplitToolbarButton"/>
+            style="@style/SplitToolbarButton"/> -->
 
         <ViewStub
             android:id="@+id/optional_button_stub"
