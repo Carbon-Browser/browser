@@ -48,17 +48,17 @@ public class SpeedDialDatabase {
 
     // defaults
     private static final String[] defaultTitles = {
-        "Bing",       // 1
-        "Google",     // 2
-        "YouTube",    // 3
-        "ESPN",       // 4
+        "Google",       // 1
+        "Bing",     // 2
+        "Carbon",    // 3
+        "YouTube",       // 4
     };
 
     private static final String[] defaultUrls = {
-        "https://www.bing.com/",       // 1
-        "https://www.google.com/",     // 2
-        "https://www.youtube.com/",    // 3
-        "https://www.espn.com/",       // 4
+        "https://www.google.com/",       // 1
+        "https://www.bing.com/",     // 2
+        "https://www.carbon.website/",    // 3
+        "https://www.youtube.com/",       // 4
     };
 
     public void writeDefaultSpeedDials() {
@@ -71,7 +71,7 @@ public class SpeedDialDatabase {
         int defaultCounter = 0;
         for (int i = 0; i != 14; i++) {
             // monetize 2, 4, 6, 7, 8, 9
-            if (i == 2 || i == 4 || i == 6 || i == 7 || i == 8 || i == 9 || i > 9) {
+            if (i == 5 || i == 4 || i == 6 || i == 7 || i == 8 || i == 9 || i > 9) {
                 // all we're doing here is basically noting the positions
                 // of the sponsored speed dials
 

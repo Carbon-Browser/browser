@@ -52,6 +52,7 @@ import org.json.JSONArray;
 import org.chromium.chrome.browser.monetization.VeveBridge;
 import org.chromium.chrome.browser.monetization.VeveUniversalObj;
 
+import android.graphics.Color;
 import java.lang.Character;
 
 public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecyclerAdapter.ViewHolder> implements VeveBridge.VeveUniversalCommunicator {
@@ -65,14 +66,20 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
     private static final String mCoindarToken = "70277:34tJkQia1LEWXFUTf5N";
 
+    private static final String ARTICLE_IMAGE_URL_BASE = "https://hydrisapps.com/carbon/android-resources/article-image-getter/?key=ergnpiqg95pbwfewnfqewfk42939&url=";
+
     private SharedPreferences mPrefs;
 
     private boolean blockImageRefresh = false;
 
+    private boolean mIsDarkMode;
+
 
     // data is passed into the constructor
-    public NTPNewsRecyclerAdapter(Context context) {
+    public NTPNewsRecyclerAdapter(Context context, boolean isDarkMode) {
         this.mInflater = LayoutInflater.from(context);
+
+        this.mIsDarkMode = isDarkMode;
 
         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
@@ -104,6 +111,9 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                             String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
                             String publisher = getValue("source", element);
                             String date = getValue("pubDate", element);
+                            if (date != null) {
+                              date = date.replaceAll("\\+0000", "");
+                            }
 
                             NewsDataObject dataObj = new NewsDataObject(url, null, title, publisher, date, imageGetterUrl);
 
@@ -225,7 +235,8 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
     }
 
     private void getNewsData() {
-        final String countryEndpointUrl = "https://coindar.org/api/v2/events?access_token=" + mCoindarToken + "&page=1&page_size=30&sort_by=date_added&order_by=1";
+        final String countryEndpointUrl = "https://www.coindesk.com/arc/outboundfeeds/rss/";
+        // "https://coindar.org/api/v2/events?access_token=" + mCoindarToken + "&page=1&page_size=30&sort_by=date_added&order_by=1";
         new AsyncTask<String>() {
             @Override
             protected String doInBackground() {
@@ -252,7 +263,12 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
             protected void onPostExecute(String result) {
                 if (result != null) {
                     try {
-                        JSONArray mJsonArray = new JSONArray(result);
+                        DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+                        InputSource src = new InputSource();
+                        src.setCharacterStream(new StringReader(result));
+
+                        Document doc = builder.parse(src);
+                        NodeList nodes = doc.getElementsByTagName("item");
 
                         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
@@ -260,35 +276,64 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                         mPrefs.edit().putLong("time_news_cached", mCurrentTime).apply();
                         mPrefs.edit().putString("cached_news", result).apply();
 
-                        for (int i = 0; i < mJsonArray.length(); i++) {
-                            JSONObject mItem = mJsonArray.getJSONObject(i);
+                        for (int i = 0; i < nodes.getLength(); i++) {
+                            Node node = nodes.item(i);
+                            if (node.getNodeType() == Node.ELEMENT_NODE) {
+                                Element element = (Element) node;
 
-                            String title = mItem.getString("caption");
-                            String url = mItem.getString("source");
+                                String title = getValue("title", element);
+                                String url = getValue("link", element);
+                                String imageUrl = getValue("media:content", element);
+                                String publisher = getValue("source", element);
+                                String date = getValue("pubDate", element);
+                                if (date != null) {
+                                  date = date.replaceAll("\\+0000", "");
+                                }
 
-                            String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
-                            String publisher = "";//getValue("source", element);
-                            String date = mItem.getString("date_public");
+                                NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, imageUrl);
 
-                            // get Image Url
-                            String imageUrl = "";
-                            for (int j = url.length() - 1; j != 0; j--) {
-                              if (Character.toString(url.charAt(j)).equals("-")) {
-                                imageUrl = "https://coindar.org/images/events/" + url.substring(j + 1) + "_en.jpg";
-                                break;
-                              }
+                                mData.add(dataObj);
+
+                                notifyItemInserted(mDataTemp.size() - 1);
                             }
-
-                            NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, imageGetterUrl);
-
-                            mData.add(dataObj);
-                            // mDataTemp.add(dataObj);
-
-                            notifyItemInserted(mDataTemp.size() - 1);
-
-                            // disable images, coindar doesnt do them
-                            // fetchImagesFromGetter(i, imageGetterUrl);
                         }
+
+                        // JSONArray mJsonArray = new JSONArray(result);
+                        // if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
+                        //
+                        // long mCurrentTime = System.currentTimeMillis();
+                        // mPrefs.edit().putLong("time_news_cached", mCurrentTime).apply();
+                        // mPrefs.edit().putString("cached_news", result).apply();
+                        //
+                        // for (int i = 0; i < mJsonArray.length(); i++) {
+                        //     JSONObject mItem = mJsonArray.getJSONObject(i);
+                        //
+                        //     String title = mItem.getString("caption");
+                        //     String url = mItem.getString("source");
+                        //
+                        //     String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
+                        //     String publisher = "";//getValue("source", element);
+                        //     String date = mItem.getString("date_public");
+                        //
+                        //     // get Image Url
+                        //     String imageUrl = "";
+                        //     for (int j = url.length() - 1; j != 0; j--) {
+                        //       if (Character.toString(url.charAt(j)).equals("-")) {
+                        //         imageUrl = "https://coindar.org/images/events/" + url.substring(j + 1) + "_en.jpg";
+                        //         break;
+                        //       }
+                        //     }
+                        //
+                        //     NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, imageGetterUrl);
+                        //
+                        //     mData.add(dataObj);
+                        //     // mDataTemp.add(dataObj);
+                        //
+                        //     notifyItemInserted(mDataTemp.size() - 1);
+                        //
+                        //     // disable images, coindar doesnt do them
+                        //     // fetchImagesFromGetter(i, imageGetterUrl);
+                        // }
                     } catch(Exception ignore) { }
                 }
             }
@@ -333,9 +378,13 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
     }
 
     private String getValue(String tag, Element element) {
-        NodeList nodes = element.getElementsByTagName(tag).item(0).getChildNodes();
-        Node node = (Node) nodes.item(0);
-        return node.getNodeValue();
+        try {
+          NodeList nodes = element.getElementsByTagName(tag).item(0).getChildNodes();
+          Node node = (Node) nodes.item(0);
+          return node.getTextContent();
+        } catch (Exception ignore) {
+          return "";
+        }
     }
 
     // inflates the row layout from xml when needed
@@ -353,6 +402,8 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
     // binds the data to the TextView in each row
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
+        String textColor = mIsDarkMode ? "#ffffff" : "#000000";
+
         try {
             View view = holder.itemView;
 
@@ -378,9 +429,11 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
                 TextView titleTextView = view.findViewById(R.id.ntp_universal_ad_item_title);
                 titleTextView.setText(((VeveUniversalObj) mData.get(position)).title);
+                titleTextView.setTextColor(Color.parseColor(textColor));
 
                 TextView descTextView = view.findViewById(R.id.ntp_universal_ad_item_description);
                 descTextView.setText(((VeveUniversalObj) mData.get(position)).description);
+                descTextView.setTextColor(Color.parseColor(textColor));
 
                 String imageUrl = ((VeveUniversalObj) mData.get(position)).imgUrl;
                 if (imageUrl != null) {
@@ -426,6 +479,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
             TextView titleTextView = view.findViewById(R.id.ntp_news_item_title);
             titleTextView.setText(((NewsDataObject) mData.get(position)).articleTitle);
+            titleTextView.setTextColor(Color.parseColor(textColor));
 
             String imageUrl = ((NewsDataObject) mData.get(position)).imageUrl;
             if (imageUrl != null) {
@@ -455,11 +509,13 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
             TextView publisherTextView = view.findViewById(R.id.ntp_news_item_publisher);
             publisherTextView.setText(((NewsDataObject) mData.get(position)).publisher);
+            publisherTextView.setTextColor(Color.parseColor(textColor));
 
             TextView publishDateTextView = view.findViewById(R.id.ntp_news_item_publishdate);
             String articleDate = ((NewsDataObject) mData.get(position)).articleDate;
-
             publishDateTextView.setText(articleDate);
+            publishDateTextView.setTextColor(Color.parseColor(textColor));
+
         } catch (Exception ignore) { }
     }
 

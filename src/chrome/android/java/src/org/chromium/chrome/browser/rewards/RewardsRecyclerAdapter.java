@@ -61,9 +61,13 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
     private LinearLayout mLoadingIndicator;
     private RewardsCommunicator mRewardsCommunicator;
 
+    private boolean mIsDarkMode;
+
     // data is passed into the constructor
-    public RewardsRecyclerAdapter(Context context, LinearLayout loadingIndicator, TextView errorMessageTextView, RewardsCommunicator communicator) {
+    public RewardsRecyclerAdapter(Context context, LinearLayout loadingIndicator, TextView errorMessageTextView, RewardsCommunicator communicator, boolean isDarkMode) {
         this.mInflater = LayoutInflater.from(context);
+
+        mIsDarkMode = isDarkMode;
 
         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
@@ -111,6 +115,8 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
     // binds the data to the TextView in each row
     @Override
     public void onBindViewHolder(ViewHolder holder, int position) {
+        String textColor = mIsDarkMode ? "#ffffff" : "#000000";
+
         View view = holder.itemView;
 
         final RewardObject mRewardObject = mData.get(position);
@@ -140,20 +146,25 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
             });
 
         TextView mRewardMonetary = view.findViewById(R.id.reward_monetary_value);
+        mRewardMonetary.setTextColor(Color.parseColor(textColor));
         TextView mRewardMonetary2 = view.findViewById(R.id.reward_monetary_value2);
 
-        String rewardPointsString = mRewardObject.valueDollar + " $CSIX";
+        String rewardPointsString = "$" + mRewardObject.valueDollar + " CSIX";
         if (mRewardObject.valueDollar < mRewardObject.valuePoints) {
 
-            rewardPointsString = "$" + mRewardObject.valueDollar;
+            rewardPointsString = "$" + mRewardObject.valueDollar + " Voucher";
 
-            mRewardMonetary2.setText("in $CSIX");
+            mRewardMonetary2.setText("BUY");
+        } else {
+          // csix upgrade
+          mRewardMonetary2.setText("UPGRADE");
         }
 
         mRewardMonetary.setText(rewardPointsString);
 
         TextView mRewardName = view.findViewById(R.id.reward_name);
         mRewardName.setText(mRewardObject.name);
+        mRewardName.setTextColor(Color.parseColor(textColor));
 
         // if (mRewardObject.name.equals("Carbon PRO (6mo)")) {
         //     AppCompatImageButton mProHelpBtn = view.findViewById(R.id.pro_help_btn);

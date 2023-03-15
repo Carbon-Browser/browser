@@ -5658,6 +5658,7 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
 
 
       <!-- Carbon STRINGS -->
+
       <message name="IDS_FRE_START" desc="">
         START
       </message>
@@ -5699,7 +5700,7 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       <message name="IDS_BOTTOM_SHEET_TEASER_2" desc="">
         coming soon
       </message>
-      
+
 
 
       <message name="IDS_VIEW_MORE_DAPPS" desc="">
@@ -5776,6 +5777,10 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       </message>
       <message name="IDS_PREFS_SECTION_GENERAL" desc="">
         General
+      </message>
+
+      <message name="IDS_NTP_NEWS_TITLE" desc="">
+        News
       </message>
 
       <message name="IDS_NTP_REWARDS_TITLE" desc="">

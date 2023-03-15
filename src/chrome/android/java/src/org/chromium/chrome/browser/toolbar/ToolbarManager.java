@@ -357,7 +357,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
     private boolean mIsDestroyed;
 
-    private RewardsAPIBridge mRewardsBridge;
+    // private RewardsAPIBridge mRewardsBridge;
 
     private OnClickListener mTabSwitcherClickHandler;
 
@@ -1409,17 +1409,17 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             mControlContainer.setReadyForBitmapCapture(true);
         }
 
-        mRewardsBridge = RewardsAPIBridge.getInstance();
+        // mRewardsBridge = RewardsAPIBridge.getInstance();
 
-        ChromeImageButton mRewardsButton = mControlContainer.findViewById(R.id.rewards_button);
-        if (mRewardsButton != null) {
-            mRewardsButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    showRewardsPopup(v);
-                }
-            });
-        }
+        // ChromeImageButton mRewardsButton = mControlContainer.findViewById(R.id.rewards_button);
+        // if (mRewardsButton != null) {
+        //     mRewardsButton.setOnClickListener(new View.OnClickListener() {
+        //         @Override
+        //         public void onClick(View v) {
+        //             showRewardsPopup(v);
+        //         }
+        //     });
+        // }
 
         if (ChromeFeatureList.isEnabled(ChromeFeatureList.TOOLBAR_IPH_ANDROID)) {
             UserEducationHelper userEducationHelper = new UserEducationHelper(mActivity, mHandler);

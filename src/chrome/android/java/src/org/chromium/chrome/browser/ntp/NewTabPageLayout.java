@@ -99,6 +99,12 @@ import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
 import android.content.SharedPreferences;
 import android.util.TypedValue;
 
+import 	android.content.res.Configuration;
+import org.chromium.chrome.browser.night_mode.GlobalNightModeStateProviderHolder;
+import android.widget.Button;
+import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.night_mode.ThemeType;
+
 /**
  * Layout for the new tab page. This positions the page elements in the correct vertical positions.
  * There are no separate phone and tablet UIs; this layout adapts based on the available space.
@@ -190,6 +196,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
     private NewTabPageUma mNewTabPageUma;
 
+    private boolean isDarkMode = true;
+
     /**
      * Constructor for inflating from XML.
      */
@@ -198,6 +206,24 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mContext = context;
         Resources res = getResources();
         mTileGridLayoutBleed = res.getDimensionPixelSize(R.dimen.tile_grid_layout_bleed);
+
+
+        int nightModeFlags =
+            context.getResources().getConfiguration().uiMode &
+            Configuration.UI_MODE_NIGHT_MASK;
+        switch (nightModeFlags) {
+            case Configuration.UI_MODE_NIGHT_YES:
+                 isDarkMode = true;
+                 break;
+
+            case Configuration.UI_MODE_NIGHT_NO:
+                 isDarkMode = false;
+                 break;
+
+            case Configuration.UI_MODE_NIGHT_UNDEFINED:
+
+                 break;
+        }
     }
 
     private void showPopupMenu(Context context, View view) {
@@ -231,6 +257,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                 findViewById(R.id.video_iph_stub), Profile.getLastUsedRegularProfile());
         insertSiteSectionView();
 
+        String textColor = isDarkMode ? "#ffffff" : "#000000";
+
         mPhotoCredit = findViewById(R.id.ntp_bg_img_credit);
         mMainLayout = findViewById(R.id.ntp_main_layout);
         mMainLayoutTopSection = findViewById(R.id.mainLayoutTopSection);
@@ -238,6 +266,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         if (bgController == null) bgController = new BackgroundController();
         bgController.getBackground((ChromeActivity)getContext(), this);
         final TextView adsBlockedTextView = (TextView)findViewById(R.id.ntp_ads_blocked);
+        adsBlockedTextView.setTextColor(Color.parseColor(textColor));
         int nAdsBlocked = mRewardsBridge.getAdsBlocked();
         String nAdsBlockedString = nAdsBlocked + "";
         if (nAdsBlockedString.length() > 3 && nAdsBlockedString.length() < 7) {
@@ -247,6 +276,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         }
         adsBlockedTextView.setText(nAdsBlockedString);
         final TextView searchesTextView = (TextView)findViewById(R.id.ntp_searches);
+        searchesTextView.setTextColor(Color.parseColor(textColor));
         int nSearches = mRewardsBridge.getSearches();
         String nSearchesString = nSearches + "";
         if (nSearchesString.length() > 3 && nSearchesString.length() < 7) {
@@ -258,12 +288,20 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
         String mDataSaved = nAdsBlocked+"";
         final TextView dataTextView = (TextView)findViewById(R.id.ntp_data_saved);
+        dataTextView.setTextColor(Color.parseColor(textColor));
         if (mDataSaved.length() >= 4) {
             mDataSaved = Math.round((nAdsBlocked/1000)*1.6) + "Mb";
         } else {
             mDataSaved = Math.round(nAdsBlocked*1.6) + "kB";
         }
         dataTextView.setText(mDataSaved);
+
+        final TextView dataTextViewDesc = (TextView)findViewById(R.id.ntp_data_saved_desc);
+        final TextView searchesTextViewDesc = (TextView)findViewById(R.id.ntp_searches_desc);
+        final TextView adsBlockedTextViewDesc = (TextView)findViewById(R.id.ntp_ads_blocked_desc);
+        dataTextViewDesc.setTextColor(Color.parseColor(textColor));
+        searchesTextViewDesc.setTextColor(Color.parseColor(textColor));
+        adsBlockedTextViewDesc.setTextColor(Color.parseColor(textColor));
 
         final TextView earnedTodayTextView = (TextView)findViewById(R.id.ntp_rewards_earned_today);
         earnedTodayTextView.setText(mRewardsBridge.getCreditsEarnedToday()+"");
@@ -280,6 +318,10 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         // }
         // speed dial section
         mSpeedDialView = SpeedDialController.inflateSpeedDial(getContext(), 4, null, false);
+        if (isDarkMode) {
+            mSpeedDialView.setDark();
+            mSpeedDialView.updateTileTextTint();
+        }
         if(mSpeedDialView.getParent() != null) ((ViewGroup)mSpeedDialView.getParent()).removeView(mSpeedDialView);
         mMainLayout.addView(mSpeedDialView, 2);
         mNewsRecyclerView = findViewById(R.id.ntp_news_recyclerview);
@@ -295,10 +337,54 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             mExploreSectionView = exploreStub.inflate();
         }
 
+        TextView mEarnedTodayTextView = findViewById(R.id.ntp_rewards_earned_today_desc);
+        mEarnedTodayTextView.setTextColor(Color.parseColor(textColor));
+        TextView mEarnedTotalTextView = findViewById(R.id.ntp_rewards_total_desc);
+        mEarnedTotalTextView.setTextColor(Color.parseColor(textColor));
+
+        TextView mNewsTitle = findViewById(R.id.news_title);
+        mNewsTitle.setTextColor(Color.parseColor(textColor));
+
+        String backgroundColor = isDarkMode ? "#262626" : "#ffffff";
+        if (!isDarkMode) {
+            LinearLayout mEarnedLinearLayout = findViewById(R.id.earned_linearlayout);
+            LinearLayout mSavedLinearLayout = findViewById(R.id.savings_linearlayout);
+            LinearLayout mComingSoonLinearLayout = findViewById(R.id.coming_soon_linearlayout);
+            LinearLayout mDappsLinearLayout = findViewById(R.id.featured_dapps_linearlayout);
+
+            mEarnedLinearLayout.setBackground(getResources().getDrawable(R.drawable.ntp_rounded_dark_background));
+            mSavedLinearLayout.setBackground(getResources().getDrawable(R.drawable.ntp_rounded_dark_background));
+            mComingSoonLinearLayout.setBackground(getResources().getDrawable(R.drawable.ntp_rounded_dark_background));
+            mDappsLinearLayout.setBackground(getResources().getDrawable(R.drawable.ntp_rounded_dark_background));
+        }
+
+        NewTabPageLayout ntpLayout = findViewById(R.id.ntp_content);
+        ntpLayout.setBackgroundColor(Color.parseColor(backgroundColor));
+
+        TextView mToggleTheme = findViewById(R.id.switch_theme);
+        mToggleTheme.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+              if (SharedPreferencesManager.getInstance().readInt("ui_theme_setting") == ThemeType.LIGHT) {
+                SharedPreferencesManager.getInstance().writeInt("ui_theme_setting", ThemeType.DARK);
+              } else {
+                SharedPreferencesManager.getInstance().writeInt("ui_theme_setting", ThemeType.LIGHT);
+              }
+            }
+        });
+
         initialiseWeb3Features();
     }
 
     private void initialiseWeb3Features() {
+        String textColor = isDarkMode ? "#ffffff" : "#000000";
+
+        TextView mComingSoonTitle = findViewById(R.id.coming_soon_textview);
+        mComingSoonTitle.setTextColor(Color.parseColor(textColor));
+
+        TextView mFeaturedDappsTitle = findViewById(R.id.featured_daps_textview);
+        mFeaturedDappsTitle.setTextColor(Color.parseColor(textColor));
+
         // Coming soon
         View comingSoonTile1 = findViewById(R.id.coming_soon_tile1);
         View stakingTile = findViewById(R.id.coming_soon_tile2);
@@ -333,10 +419,18 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             }
         });
 
-        ((TextView) comingSoonTile1.findViewById(R.id.speed_dial_tile_textview)).setText("Wallet");
-        ((TextView) stakingTile.findViewById(R.id.speed_dial_tile_textview)).setText("Staking");
-        ((TextView) comingSoonTile3.findViewById(R.id.speed_dial_tile_textview)).setText("Swap");
-        ((TextView) comingSoonTile4.findViewById(R.id.speed_dial_tile_textview)).setText("Bridge");
+        TextView mWalletTextView = comingSoonTile1.findViewById(R.id.speed_dial_tile_textview);
+        TextView mStakingTextView = stakingTile.findViewById(R.id.speed_dial_tile_textview);
+        TextView mSwapTextView = comingSoonTile3.findViewById(R.id.speed_dial_tile_textview);
+        TextView mBridgeTextView = comingSoonTile4.findViewById(R.id.speed_dial_tile_textview);
+        mWalletTextView.setText("Wallet");
+        mStakingTextView.setText("Staking");
+        mSwapTextView.setText("Swap");
+        mBridgeTextView.setText("Bridge");
+        mWalletTextView.setTextColor(Color.parseColor(textColor));
+        mStakingTextView.setTextColor(Color.parseColor(textColor));
+        mSwapTextView.setTextColor(Color.parseColor(textColor));
+        mBridgeTextView.setTextColor(Color.parseColor(textColor));
 
         FrameLayout comingSoonTile1Background = comingSoonTile1.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout stakingTileBackground = stakingTile.findViewById(R.id.speed_dial_tile_view_icon_background);
@@ -364,48 +458,113 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         View featuredDappTile2 = findViewById(R.id.featured_daps2);
         View featuredDappTile3 = findViewById(R.id.featured_daps3);
         View featuredDappTile4 = findViewById(R.id.featured_daps4);
+        View featuredDappTile5 = findViewById(R.id.featured_daps5);
+        View featuredDappTile6 = findViewById(R.id.featured_daps6);
+        View featuredDappTile7 = findViewById(R.id.featured_daps7);
+        View featuredDappTile8 = findViewById(R.id.featured_daps8);
 
-        ((TextView) featuredDappTile1.findViewById(R.id.speed_dial_tile_textview)).setText("ChatGPT");
-        ((TextView) featuredDappTile2.findViewById(R.id.speed_dial_tile_textview)).setText("OpenSea");
-        ((TextView) featuredDappTile3.findViewById(R.id.speed_dial_tile_textview)).setText("Curate");
-        ((TextView) featuredDappTile4.findViewById(R.id.speed_dial_tile_textview)).setText("Binance");
+
+        TextView mChaingeTextView = featuredDappTile1.findViewById(R.id.speed_dial_tile_textview);
+        TextView mPancakeSwapTextView = featuredDappTile2.findViewById(R.id.speed_dial_tile_textview);
+        TextView mBiswapTextView = featuredDappTile3.findViewById(R.id.speed_dial_tile_textview);
+        TextView mBeefyTextView = featuredDappTile4.findViewById(R.id.speed_dial_tile_textview);
+        mChaingeTextView.setText("Chainge");
+        mPancakeSwapTextView.setText("PancakeSwap");
+        mBiswapTextView.setText("Biswap");
+        mBeefyTextView.setText("Beefy");
+        mChaingeTextView.setTextColor(Color.parseColor(textColor));
+        mPancakeSwapTextView.setTextColor(Color.parseColor(textColor));
+        mBiswapTextView.setTextColor(Color.parseColor(textColor));
+        mBeefyTextView.setTextColor(Color.parseColor(textColor));
 
         ((FrameLayout) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
         ((FrameLayout) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
         ((FrameLayout) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
         ((FrameLayout) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
 
-        ((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_chatgpt));
-        ((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_opensea));
-        ((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_curate));
-        ((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_binance));
+        ((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_chainge));
+        ((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_pancake));
+        ((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_biswap));
+        ((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_beefy));
+
+
+        TextView mBinanceTextView = featuredDappTile5.findViewById(R.id.speed_dial_tile_textview);
+        TextView mKucoinTextView = featuredDappTile6.findViewById(R.id.speed_dial_tile_textview);
+        TextView mFlokiTextView = featuredDappTile7.findViewById(R.id.speed_dial_tile_textview);
+        TextView mCurateTextView = featuredDappTile8.findViewById(R.id.speed_dial_tile_textview);
+        mBinanceTextView.setText("Binance");
+        mKucoinTextView.setText("Kucoin");
+        mFlokiTextView.setText("Floki");
+        mCurateTextView.setText("Curate");
+        mBinanceTextView.setTextColor(Color.parseColor(textColor));
+        mKucoinTextView.setTextColor(Color.parseColor(textColor));
+        mFlokiTextView.setTextColor(Color.parseColor(textColor));
+        mCurateTextView.setTextColor(Color.parseColor(textColor));
+
+        ((FrameLayout) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+        ((FrameLayout) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+
+        ((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_binance));
+        ((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_kucoin));
+        ((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_floki));
+        ((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_curate));
 
 
         featuredDappTile1.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://chat.openai.com/");
+                loadUrl("https://hub.chainge.finance/");
             }
         });
 
         featuredDappTile2.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://opensea.io/");
+                loadUrl("https://pancakeswap.finance/info/pairs/0x43c2abe5e3bcec619072d8668ac83ad825da707f?chain=bsc");
             }
         });
 
         featuredDappTile3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://curate.style/");
+                loadUrl("https://biswap.org/");
             }
         });
 
         featuredDappTile4.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://www.binance.com");
+                loadUrl("https://app.beefy.com/vault/cakev2-csix-cake");
+            }
+        });
+
+        featuredDappTile5.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://binance.com/");
+            }
+        });
+
+        featuredDappTile6.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://www.kucoin.com/c");
+            }
+        });
+
+        featuredDappTile7.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://floki.com/");
+            }
+        });
+
+        featuredDappTile8.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://curate.style/");
             }
         });
 
@@ -428,7 +587,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
     private void getNewsArticles() {
         mNewsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        mNewsRecyclerView.setAdapter(new NTPNewsRecyclerAdapter(getContext()));
+        mNewsRecyclerView.setAdapter(new NTPNewsRecyclerAdapter(getContext(), isDarkMode));
     }
 
     /**

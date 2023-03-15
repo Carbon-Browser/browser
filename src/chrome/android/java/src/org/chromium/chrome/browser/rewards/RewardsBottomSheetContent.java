@@ -30,6 +30,7 @@ import com.bumptech.glide.request.target.DrawableImageViewTarget;
 import com.bumptech.glide.Glide;
 import android.widget.ImageView;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import 	android.content.res.Configuration;
 
 /**
  * Bottom sheet content for the screen which allows a parent to approve or deny a website.
@@ -46,6 +47,27 @@ class RewardsBottomSheetContent implements BottomSheetContent {
         mContentView = (LinearLayout) LayoutInflater.from(mContext).inflate(
                 R.layout.rewards_bottom_sheet, null);
 
+        boolean isDarkMode = false;
+        int nightModeFlags =
+            context.getResources().getConfiguration().uiMode &
+            Configuration.UI_MODE_NIGHT_MASK;
+        switch (nightModeFlags) {
+            case Configuration.UI_MODE_NIGHT_YES:
+                 isDarkMode = true;
+                 break;
+
+            case Configuration.UI_MODE_NIGHT_NO:
+                 isDarkMode = false;
+                 break;
+
+            case Configuration.UI_MODE_NIGHT_UNDEFINED:
+
+                 break;
+        }
+
+        TextView mBottomSheetTitle = mContentView.findViewById(R.id.rewards_bottom_sheet_title);
+        mBottomSheetTitle.setTextColor(Color.parseColor(isDarkMode ? "#ffffff" : "#000000"));
+
         mRewardsBridge = RewardsAPIBridge.getInstance();
 
         TextView mBalanceTextView = mContentView.findViewById(R.id.bottom_sheet_rewards_balance);
@@ -59,7 +81,7 @@ class RewardsBottomSheetContent implements BottomSheetContent {
         LinearLayout mLoadingIndicatorContainer = mContentView.findViewById(R.id.reward_loading_container);
         ImageView mLoadingIndicator = mContentView.findViewById(R.id.reward_loading);
         Glide.with(mContentView.getContext())
-            // .load("https://sigmawolf.io/android-resources/images/rewards_loading.gif")
+            // .load("https://hydrisapps.com/carbon/android-resources/images/rewards_loading.gif")
             .load("http://qnni7t2n4hc7770iq8npfli8u4.ingress.europlots.com/wp-content/uploads/2022/12/loading.gif")
             .thumbnail(0.05f)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
@@ -67,7 +89,7 @@ class RewardsBottomSheetContent implements BottomSheetContent {
 
         RecyclerView mRewardsRecyclerView = mContentView.findViewById(R.id.rewards_recyclerview);
         mRewardsRecyclerView.setLayoutManager(new LinearLayoutManager(mContentView.getContext()));
-        mRewardsRecyclerView.setAdapter(new RewardsRecyclerAdapter(mContentView.getContext(), mLoadingIndicatorContainer, mRewardErrorMessage, rewardsCommunicator));
+        mRewardsRecyclerView.setAdapter(new RewardsRecyclerAdapter(mContentView.getContext(), mLoadingIndicatorContainer, mRewardErrorMessage, rewardsCommunicator, isDarkMode));
     }
 
     @Override
