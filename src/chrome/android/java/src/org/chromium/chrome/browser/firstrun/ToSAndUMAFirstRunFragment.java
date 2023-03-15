@@ -116,9 +116,9 @@ public class ToSAndUMAFirstRunFragment
         mTosAndPrivacy = (TextView) view.findViewById(R.id.tos_and_privacy);
 
         // set start button gradient
-        Shader textShader = new LinearGradient(0, 0, 430, 0,
+        Shader textShader = new LinearGradient(0, 0, 155, 0,
             new int[]{Color.parseColor("#FF320A"),Color.parseColor("#FF9133")},
-           null, Shader.TileMode.CLAMP);
+           null, Shader.TileMode.REPEAT);
         mAcceptButton.getPaint().setShader(textShader);
 
         // Register event listeners.

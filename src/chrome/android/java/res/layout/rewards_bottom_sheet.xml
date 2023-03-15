@@ -32,6 +32,7 @@
         android:importantForAccessibility="no"
         android:textSize="18sp"
         android:text="@string/bottom_sheet_title_rewards"
+        android:id="@+id/rewards_bottom_sheet_title"
         android:textColor="#ffffff"/>
 
     <LinearLayout
@@ -119,8 +120,8 @@
                 android:id="@+id/rewards_recyclerview"
                 android:layout_height="wrap_content"
                 android:layout_width="match_parent"
-                android:paddingStart="30dp"
-                android:paddingEnd="30dp"
+                android:paddingStart="40dp"
+                android:paddingEnd="40dp"
                 android:minHeight="200dp"/>
         </FrameLayout>
 </LinearLayout>

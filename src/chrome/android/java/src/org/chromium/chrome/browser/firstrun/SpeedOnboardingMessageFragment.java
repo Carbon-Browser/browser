@@ -32,7 +32,7 @@ public class SpeedOnboardingMessageFragment extends Fragment implements FirstRun
 
         Button mButton = (Button) rootView.findViewById(R.id.button_primary);
         // set start button gradient
-        Shader textShader = new LinearGradient(0, 0, 160, 0,
+        Shader textShader = new LinearGradient(0, 0, 150, 0,
             new int[]{Color.parseColor("#FF320A"),Color.parseColor("#FF9133")},
            null, Shader.TileMode.CLAMP);
         mButton.getPaint().setShader(textShader);

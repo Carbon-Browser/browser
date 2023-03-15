@@ -38,7 +38,6 @@
         android:layout_width="100dp"
         android:layout_height="50dp"
         android:paddingTop="8dp"
-        android:paddingBottom="8dp"
         android:orientation="vertical">
 
         <TextView
@@ -52,10 +51,12 @@
 
         <TextView
             android:id="@+id/reward_monetary_value2"
-            android:layout_width="100dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
-            android:textColor="#818181"
+            android:layout_width="80dp"
+            android:gravity="center"
+            android:layout_marginStart="20dp"
+            android:layout_height="17dp"
+            android:textColor="#ffffff"
+            android:background="@drawable/rewards_buy_button_background"
             android:textSize="12sp" />
     </LinearLayout>
 

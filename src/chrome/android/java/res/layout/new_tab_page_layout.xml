@@ -82,6 +82,7 @@
                         android:paddingBottom="5dp">
 
                         <LinearLayout
+                            android:id="@+id/earned_linearlayout"
                             android:orientation="vertical"
                             android:layout_width="0dp"
                             android:background="@drawable/ntp_rounded_background"
@@ -97,7 +98,7 @@
                                 android:textSize="12sp"
                                 android:textStyle="bold"
                                 android:fontFamily="sans-serif"
-                                android:textColor="@android:color/white"
+                                android:textColor="@macro/default_icon_color"
                                 android:text="@string/ntp_rewards_title"
                                 android:layout_gravity="center"/>
 
@@ -125,6 +126,7 @@
                                       android:text="@string/rewards_earned_today"
                                       android:layout_width="wrap_content"
                                       android:layout_height="wrap_content"
+                                      android:id="@+id/ntp_rewards_earned_today_desc"
                                       android:fontFamily="sans-serif"
                                       android:textColor="@android:color/white"
                                       android:layout_gravity="center"
@@ -151,6 +153,7 @@
                                       android:text="@string/rewards_total"
                                       android:layout_width="wrap_content"
                                       android:layout_height="wrap_content"
+                                      android:id="@+id/ntp_rewards_total_desc"
                                       android:fontFamily="sans-serif"
                                       android:textColor="@android:color/white"
                                       android:textSize="12sp"
@@ -162,12 +165,12 @@
 
 
                         <LinearLayout
+                            android:id="@+id/savings_linearlayout"
                             android:layout_width="0dp"
                             android:layout_height="80dp"
                             android:background="@drawable/ntp_rounded_background"
                             android:layout_weight="1"
                             android:gravity="center"
-                            android:padding="10dp"
                             android:layout_gravity="center"
                             android:orientation="vertical">
 
@@ -175,10 +178,14 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="0dp"
                                 android:layout_weight="1"
+                                android:layout_marginTop="10dp"
+                                android:layout_marginEnd="10dp"
+                                android:layout_marginStart="10dp"
                                 android:orientation="horizontal"
                                 android:layout_gravity="center_vertical">
 
                                 <TextView
+                                    android:id="@+id/ntp_data_saved_desc"
                                     android:text="@string/data_saved"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
@@ -210,10 +217,13 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="0dp"
                                 android:layout_weight="1"
+                                android:layout_marginEnd="10dp"
+                                android:layout_marginStart="10dp"
                                 android:orientation="horizontal"
                                 android:layout_gravity="center_vertical">
 
                                 <TextView
+                                    android:id="@+id/ntp_ads_blocked_desc"
                                     android:text="@string/ads_blocked"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
@@ -245,10 +255,14 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="0dp"
                                 android:layout_weight="1"
+                                android:layout_marginEnd="10dp"
+                                android:layout_marginStart="10dp"
+                                android:layout_marginBottom="10dp"
                                 android:orientation="horizontal"
                                 android:layout_gravity="center_vertical">
 
                                 <TextView
+                                    android:id="@+id/ntp_searches_desc"
                                     android:text="@string/searches"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
@@ -289,10 +303,10 @@
 
               <!-- Coming soon -->
               <LinearLayout
+                android:id="@+id/coming_soon_linearlayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/ntp_rounded_background"
-                android:paddingTop="14dp"
                 android:orientation="vertical">
 
                 <TextView
@@ -303,6 +317,7 @@
                     android:textStyle="bold"
                     android:textColor="@android:color/white"
                     android:layout_marginBottom="10dp"
+                    android:layout_marginTop="14dp"
                     android:textSize="14sp"
                     android:text="@string/coming_soon"
                     android:layout_gravity="center" />
@@ -364,11 +379,10 @@
 
               <!-- Featured DApps -->
               <LinearLayout
+                android:id="@+id/featured_dapps_linearlayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingBottom="20dp"
                 android:layout_marginTop="10dp"
-                android:paddingTop="14dp"
                 android:background="@drawable/ntp_rounded_background"
                 android:orientation="vertical">
 
@@ -380,6 +394,7 @@
                     android:textStyle="bold"
                     android:textColor="@android:color/white"
                     android:layout_marginBottom="10dp"
+                    android:layout_marginTop="14dp"
                     android:textSize="14sp"
                     android:text="@string/featured_daps"
                     android:layout_gravity="center" />
@@ -388,6 +403,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
+                    android:paddingBottom="10dp"
                     android:orientation="horizontal">
 
                     <Space
@@ -445,6 +461,69 @@
                     </Space>
 
                 </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:paddingBottom="20dp"
+                    android:orientation="horizontal">
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps5"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps6"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps7"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                    <include
+                        layout="@layout/speed_dial_tile_view"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:id="@+id/featured_daps8"/>
+
+                    <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" >
+                    </Space>
+
+                </LinearLayout>
               </LinearLayout>
 
               <TextView
@@ -465,6 +544,37 @@
                   android:text="@string/view_more_dapps"
                   android:layout_gravity="center" />
             </LinearLayout>
+
+            <FrameLayout
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content">
+
+              <TextView
+                android:id="@+id/news_title"
+                android:layout_width="wrap_content"
+                android:layout_marginStart="16dp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif"
+                android:textSize="14sp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="start"
+                android:text="@string/ntp_news_title"/>
+
+              <TextView
+                android:id="@+id/switch_theme"
+                android:text="Switch theme"
+                android:gravity="center"
+                android:textStyle="bold|italic"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:fontFamily="sans-serif"
+                android:layout_gravity="end"
+                android:textSize="12sp"
+                android:textColor="@android:color/white"
+                android:background="@drawable/carbon_button_bg"
+                android:layout_width="wrap_content"
+                android:layout_height="24dp"/>
+            </FrameLayout>
 
             <!-- end -->
             <androidx.recyclerview.widget.RecyclerView
