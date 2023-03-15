@@ -171,9 +171,10 @@ public class ExternalAuthUtils {
      *         when it is updating.
      */
     public boolean isGooglePlayServicesMissing(final Context context) {
-        final int resultCode = checkGooglePlayServicesAvailable(context);
-        return (resultCode == ConnectionResult.SERVICE_MISSING
-                || resultCode == ConnectionResult.SERVICE_INVALID);
+        // final int resultCode = checkGooglePlayServicesAvailable(context);
+        // return (resultCode == ConnectionResult.SERVICE_MISSING
+        //         || resultCode == ConnectionResult.SERVICE_INVALID);
+        return true;
     }
 
     /**
@@ -188,20 +189,21 @@ public class ExternalAuthUtils {
      * @return true if and only if Google Play Services can be used
      */
     public boolean canUseGooglePlayServices(final UserRecoverableErrorHandler errorHandler) {
-        Context context = ContextUtils.getApplicationContext();
-        final int resultCode = checkGooglePlayServicesAvailable(context);
-        if (resultCode == ConnectionResult.SUCCESS) return true;
-        // resultCode is some kind of error.
-        Log.v(TAG, "Unable to use Google Play Services: %s", describeError(resultCode));
-        if (isUserRecoverableError(resultCode)) {
-            Runnable errorHandlerTask = new Runnable() {
-                @Override
-                public void run() {
-                    errorHandler.handleError(context, resultCode);
-                }
-            };
-            PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, errorHandlerTask);
-        }
+        // Context context = ContextUtils.getApplicationContext();
+        // final int resultCode = checkGooglePlayServicesAvailable(context);
+        // if (resultCode == ConnectionResult.SUCCESS) return true;
+        // // resultCode is some kind of error.
+        // Log.v(TAG, "Unable to use Google Play Services: %s", describeError(resultCode));
+        // if (isUserRecoverableError(resultCode)) {
+        //     Runnable errorHandlerTask = new Runnable() {
+        //         @Override
+        //         public void run() {
+        //             errorHandler.handleError(context, resultCode);
+        //         }
+        //     };
+        //     PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, errorHandlerTask);
+        // }
+        // return false;
         return false;
     }
 

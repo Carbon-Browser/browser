@@ -5,12 +5,12 @@
 -->
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- 2021 color palette. -->
-    <color name="custom_active_color">#df8768</color>
+    <color name="custom_active_color">#FF5D1D</color>
     <color name="baseline_error_200">#F2B8B5</color>
     <color name="baseline_error_600">#B3261E</color>
     <color name="baseline_primary_0">@android:color/white</color>
     <color name="baseline_primary_100">#D3E3FD</color>
-    <color name="baseline_primary_200">#A8C7FA</color>
+    <color name="baseline_primary_200">#FF5D1D</color>
     <color name="baseline_primary_200_alpha_10" tools:ignore="UnusedResources">#19A8C7FA</color>
     <color name="baseline_primary_200_alpha_20">#33A8C7FA</color>
     <color name="baseline_primary_200_alpha_50">#80A8C7FA</color>
