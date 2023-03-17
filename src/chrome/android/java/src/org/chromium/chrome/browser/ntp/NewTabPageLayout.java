@@ -550,7 +550,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         featuredDappTile6.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://www.kucoin.com/c");
+                loadUrl("https://www.kucoin.com/");
             }
         });
 
