@@ -105,10 +105,10 @@
                             <LinearLayout
                               android:orientation="horizontal"
                               android:layout_width="wrap_content"
-                              android:padding="10dp"
                               android:layout_height="wrap_content">
 
-                              <FrameLayout
+                              <LinearLayout
+                                  android:orientation="vertical"
                                   android:layout_width="wrap_content"
                                   android:layout_height="wrap_content">
                                   <TextView
@@ -119,7 +119,6 @@
                                       android:textColor="#FF5D1D"
                                       android:fontFamily="sans-serif"
                                       android:textStyle="bold"
-                                      android:layout_marginBottom="14dp"
                                       android:layout_gravity="center"/>
 
                                   <TextView
@@ -130,13 +129,13 @@
                                       android:fontFamily="sans-serif"
                                       android:textColor="@android:color/white"
                                       android:layout_gravity="center"
-                                      android:textSize="12sp"
-                                      android:paddingTop="30dp"/>
-                              </FrameLayout>
+                                      android:textSize="12sp"/>
+                              </LinearLayout>
 
-                              <FrameLayout
+                              <LinearLayout
                                   android:layout_width="wrap_content"
                                   android:layout_marginStart="15dp"
+                                  android:orientation="vertical"
                                   android:layout_height="wrap_content">
                                   <TextView
                                       android:id="@+id/ntp_rewards_total"
@@ -146,7 +145,6 @@
                                       android:fontFamily="sans-serif"
                                       android:textStyle="bold"
                                       android:textColor="#FF5D1D"
-                                      android:layout_marginBottom="14dp"
                                       android:layout_gravity="center"/>
 
                                   <TextView
@@ -157,9 +155,8 @@
                                       android:fontFamily="sans-serif"
                                       android:textColor="@android:color/white"
                                       android:textSize="12sp"
-                                      android:layout_gravity="center"
-                                      android:paddingTop="30dp"/>
-                              </FrameLayout>
+                                      android:layout_gravity="center"/>
+                              </LinearLayout>
                             </LinearLayout>
                         </LinearLayout>
 
@@ -174,14 +171,13 @@
                             android:layout_gravity="center"
                             android:orientation="vertical">
 
-                            <LinearLayout
+                            <RelativeLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="0dp"
                                 android:layout_weight="1"
                                 android:layout_marginTop="10dp"
                                 android:layout_marginEnd="10dp"
                                 android:layout_marginStart="10dp"
-                                android:orientation="horizontal"
                                 android:layout_gravity="center_vertical">
 
                                 <TextView
@@ -193,33 +189,30 @@
                                     android:ellipsize="end"
                                     android:fontFamily="sans-serif"
                                     android:maxLines="1"
-                                    android:layout_weight="1"
                                     android:textColor="@android:color/white"
+                                    android:layout_alignParentStart="true"
+                                    android:layout_toStartOf="@id/ntp_data_saved"
                                     android:layout_gravity="left|center_vertical"/>
-
-                                <Space
-                                  android:layout_width="0dp"
-                                  android:layout_height="1dp"
-                                  android:layout_weight="1" />
 
                                 <TextView
                                     android:id="@+id/ntp_data_saved"
-                                    android:layout_width="45dp"
+                                    android:layout_width="wrap_content"
                                     android:fontFamily="sans-serif"
                                     android:layout_height="wrap_content"
                                     android:textSize="12sp"
+                                    android:layout_marginStart="10dp"
+                                    android:layout_alignParentEnd="true"
                                     android:layout_gravity="right|center_vertical"
                                     android:textColor="@android:color/white"
                                     android:gravity="center|right"/>
-                            </LinearLayout>
+                            </RelativeLayout>
 
-                            <LinearLayout
+                            <RelativeLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="0dp"
                                 android:layout_weight="1"
                                 android:layout_marginEnd="10dp"
                                 android:layout_marginStart="10dp"
-                                android:orientation="horizontal"
                                 android:layout_gravity="center_vertical">
 
                                 <TextView
@@ -232,33 +225,30 @@
                                     android:textColor="@android:color/white"
                                     android:ellipsize="end"
                                     android:maxLines="1"
+                                    android:layout_alignParentStart="true"
+                                    android:layout_toStartOf="@id/ntp_ads_blocked"
                                     android:layout_gravity="left|center_vertical"/>
-
-                                <!-- <Space
-                                    android:layout_width="0dp"
-                                    android:layout_height="1dp"
-                                    android:layout_weight="1" /> -->
 
                                 <TextView
                                     android:id="@+id/ntp_ads_blocked"
-                                    android:layout_width="45dp"
+                                    android:layout_width="wrap_content"
                                     android:textColor="@android:color/white"
                                     android:layout_height="wrap_content"
                                     android:fontFamily="sans-serif"
+                                    android:layout_marginStart="10dp"
+                                    android:layout_alignParentEnd="true"
                                     android:textSize="12sp"
-                                    android:layout_weight="2"
                                     android:layout_gravity="right|center_vertical"
                                     android:gravity="center|right"/>
-                            </LinearLayout>
+                            </RelativeLayout>
 
-                            <LinearLayout
+                            <RelativeLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="0dp"
                                 android:layout_weight="1"
                                 android:layout_marginEnd="10dp"
                                 android:layout_marginStart="10dp"
                                 android:layout_marginBottom="10dp"
-                                android:orientation="horizontal"
                                 android:layout_gravity="center_vertical">
 
                                 <TextView
@@ -271,23 +261,22 @@
                                     android:textColor="@android:color/white"
                                     android:ellipsize="end"
                                     android:maxLines="1"
+                                    android:layout_alignParentStart="true"
+                                    android:layout_toStartOf="@id/ntp_searches"
                                     android:layout_gravity="left|center_vertical"/>
-
-                                <Space
-                                    android:layout_width="0dp"
-                                    android:layout_height="1dp"
-                                    android:layout_weight="1" />
 
                                 <TextView
                                     android:id="@+id/ntp_searches"
-                                    android:layout_width="45dp"
+                                    android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
                                     android:textColor="@android:color/white"
                                     android:fontFamily="sans-serif"
+                                    android:layout_marginStart="10dp"
+                                    android:layout_alignParentEnd="true"
                                     android:textSize="12sp"
                                     android:layout_gravity="right|center_vertical"
                                     android:gravity="center|right"/>
-                            </LinearLayout>
+                            </RelativeLayout>
                         </LinearLayout>
                     </LinearLayout>
 

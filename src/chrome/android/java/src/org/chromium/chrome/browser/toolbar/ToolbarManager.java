@@ -1072,9 +1072,11 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
     @Override
     public void loadRewardsUrl(String url, View view) {
-        LoadUrlParams loadUrlParams = new LoadUrlParams(url);
-        ChromeActivity activity = (ChromeActivity) view.getContext();
-        activity.getActivityTab().loadUrl(loadUrlParams);
+        try {
+          LoadUrlParams loadUrlParams = new LoadUrlParams(url);
+          ChromeActivity activity = (ChromeActivity) view.getContext();
+          activity.getActivityTab().loadUrl(loadUrlParams);
+        } catch (Exception ignore) {}
     }
 
     private TopToolbarCoordinator createTopToolbarCoordinator(
@@ -1449,16 +1451,20 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
     @Override
     public void loadUrl(String url, View v) {
-        LoadUrlParams loadUrlParams = new LoadUrlParams(url);
-        ChromeActivity activity = (ChromeActivity)v.getContext();
-        activity.getActivityTab().loadUrl(loadUrlParams);
+        try {
+          LoadUrlParams loadUrlParams = new LoadUrlParams(url);
+          ChromeActivity activity = (ChromeActivity)v.getContext();
+          activity.getActivityTab().loadUrl(loadUrlParams);
+        } catch (Exception ignore) {}
     }
 
     @Override
     public void loadHomepage(View v) {
-        LoadUrlParams loadUrlParams = new LoadUrlParams(homepageUrl());
-        ChromeActivity activity = (ChromeActivity)v.getContext();
-        activity.getActivityTab().loadUrl(loadUrlParams);
+        try {
+          LoadUrlParams loadUrlParams = new LoadUrlParams(homepageUrl());
+          ChromeActivity activity = (ChromeActivity)v.getContext();
+          activity.getActivityTab().loadUrl(loadUrlParams);
+        } catch (Exception ignore) {}
     }
 
     @Override

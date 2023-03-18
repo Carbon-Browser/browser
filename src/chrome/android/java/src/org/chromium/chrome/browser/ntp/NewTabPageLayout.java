@@ -234,10 +234,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             public boolean onMenuItemClick(MenuItem item) {
                 int id = item.getItemId();
                 if (id == R.id.learn_more_id) {
-                    if (getContext() instanceof ChromeActivity) {
-                        LoadUrlParams loadUrlParams = new LoadUrlParams("https://carbon.website/#rewards");
-                        ((ChromeActivity)getContext()).getActivityTab().loadUrl(loadUrlParams);
-                    }
+                    loadUrl("https://carbon.website/#rewards");
                 }
                 return true;
             }
@@ -579,10 +576,12 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     }
 
     private void loadUrl(String url) {
-      if (getContext() instanceof ChromeActivity) {
-          LoadUrlParams loadUrlParams = new LoadUrlParams(url);
-          ((ChromeActivity)getContext()).getActivityTab().loadUrl(loadUrlParams);
-      }
+      try {
+        if (getContext() instanceof ChromeActivity) {
+            LoadUrlParams loadUrlParams = new LoadUrlParams(url);
+            ((ChromeActivity)getContext()).getActivityTab().loadUrl(loadUrlParams);
+        }
+      } catch (Exception ignore) {}
     }
 
     private void getNewsArticles() {
@@ -1218,10 +1217,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             mPhotoCredit.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    if (getContext() instanceof ChromeActivity) {
-                        LoadUrlParams loadUrlParams = new LoadUrlParams(creditUrl);
-                        ((ChromeActivity)getContext()).getActivityTab().loadUrl(loadUrlParams);
-                    }
+                    loadUrl(creditUrl);
                 }
             });
         } catch (Exception ignore) { }

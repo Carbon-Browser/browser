@@ -419,11 +419,13 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                 view.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                      if (view.getContext() instanceof ChromeActivity) {
-                          LoadUrlParams loadUrlParams = new LoadUrlParams(((VeveUniversalObj) mData.get(holder.getAdapterPosition())).url);
-                          ChromeActivity activity = (ChromeActivity) view.getContext();
-                          activity.getActivityTab().loadUrl(loadUrlParams);
-                      }
+                      try {
+                        if (view.getContext() instanceof ChromeActivity) {
+                            LoadUrlParams loadUrlParams = new LoadUrlParams(((VeveUniversalObj) mData.get(holder.getAdapterPosition())).url);
+                            ChromeActivity activity = (ChromeActivity) view.getContext();
+                            activity.getActivityTab().loadUrl(loadUrlParams);
+                        }
+                      } catch (Exception ignore) {}
                     }
                 });
 
@@ -469,11 +471,13 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
             view.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                  if (view.getContext() instanceof ChromeActivity) {
-                      LoadUrlParams loadUrlParams = new LoadUrlParams(((NewsDataObject) mData.get(holder.getAdapterPosition())).articleUrl);
-                      ChromeActivity activity = (ChromeActivity) view.getContext();
-                      activity.getActivityTab().loadUrl(loadUrlParams);
-                  }
+                  try {
+                      if (view.getContext() instanceof ChromeActivity) {
+                          LoadUrlParams loadUrlParams = new LoadUrlParams(((NewsDataObject) mData.get(holder.getAdapterPosition())).articleUrl);
+                          ChromeActivity activity = (ChromeActivity) view.getContext();
+                          activity.getActivityTab().loadUrl(loadUrlParams);
+                      }
+                  } catch (Exception ignore) {}
                 }
             });
 

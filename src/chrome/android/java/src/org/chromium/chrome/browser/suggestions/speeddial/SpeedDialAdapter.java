@@ -334,16 +334,18 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
                         updateEditMode(false);
                     } else {
                         // Load the speed dial
-                        if (mRecyclerView.getContext() instanceof ChromeActivity) {
-                            LoadUrlParams loadUrlParams = new LoadUrlParams(tile.url);
-                            ChromeActivity activity = (ChromeActivity)mRecyclerView.getContext();
-                            activity.getActivityTab().loadUrl(loadUrlParams);
-                        }
+                        try {
+                          if (mRecyclerView.getContext() instanceof ChromeActivity) {
+                              LoadUrlParams loadUrlParams = new LoadUrlParams(tile.url);
+                              ChromeActivity activity = (ChromeActivity)mRecyclerView.getContext();
+                              activity.getActivityTab().loadUrl(loadUrlParams);
+                          }
 
-                        if (speedDialInteraction != null) {
-                            speedDialInteraction.onSpeedDialClicked();
-                        }
-                        Amplitude.getInstance().logEvent("speed_dial_click_event");
+                          if (speedDialInteraction != null) {
+                              speedDialInteraction.onSpeedDialClicked();
+                          }
+                          Amplitude.getInstance().logEvent("speed_dial_click_event");
+                        } catch (Exception ignore) {}
                     }
                 }
             });
