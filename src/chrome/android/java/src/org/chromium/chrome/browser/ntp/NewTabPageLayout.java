@@ -526,7 +526,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         featuredDappTile3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://biswap.org/");
+                loadUrl("https://biswap.org/?utm_source=BD_carb&utm_medium=BD_btnhp&utm_campaign=BD_carbtheo");
             }
         });
 
