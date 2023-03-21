@@ -512,7 +512,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         featuredDappTile1.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://hub.chainge.finance/");
+                loadUrl("https://openapi.chainge.finance/app/");
             }
         });
 
