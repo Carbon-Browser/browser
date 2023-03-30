@@ -75,6 +75,7 @@ public class ToggleTabStackButton
     public void setBrandedColorScheme(@BrandedColorScheme int brandedColorScheme) {
         // mTabSwitcherButtonDrawable.setTint(
         //         ThemeUtils.getThemedToolbarIconTint(getContext(), brandedColorScheme));
+        invalidate();
     }
 
     /**
