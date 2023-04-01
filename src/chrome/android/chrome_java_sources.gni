@@ -586,6 +586,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/firstrun/PrivacyOnboardingMessageFragment.java",
   "java/src/org/chromium/chrome/browser/firstrun/SpeedOnboardingMessageFragment.java",
   "java/src/org/chromium/chrome/browser/firstrun/RewardsOnboardingMessageFragment.java",
+  "java/src/org/chromium/chrome/browser/firstrun/DefaultBrowserOnboardingMessageFragment.java",
   "java/src/org/chromium/chrome/browser/firstrun/ChildAccountStatusSupplier.java",
   "java/src/org/chromium/chrome/browser/firstrun/DefaultSearchEngineFirstRunFragment.java",
   "java/src/org/chromium/chrome/browser/firstrun/FirstRunActivity.java",

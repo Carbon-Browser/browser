@@ -645,6 +645,7 @@ chrome_java_resources = [
   "java/res/layout/clear_browsing_important_dialog_listview.xml",
   "java/res/layout/bookmark_action_bar.xml",
   "java/res/layout/infobar_translate_compact_content.xml",
+  "java/res/layout/default_browser_first_run_fragment.xml",
   "java/res/layout/contextual_search_promo_view.xml",
   "java/res/layout/history_item_view.xml",
   "java/res/layout/long_screenshots_area_selection_dialog.xml",
