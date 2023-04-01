@@ -104,6 +104,13 @@ import org.chromium.chrome.browser.night_mode.GlobalNightModeStateProviderHolder
 import android.widget.Button;
 import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.night_mode.ThemeType;
+import android.content.Intent;
+import android.provider.Settings;
+import android.net.Uri;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.os.Build;
+import android.app.role.RoleManager;
 
 /**
  * Layout for the new tab page. This positions the page elements in the correct vertical positions.
@@ -370,7 +377,52 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             }
         });
 
+        TextView mSetDefault = findViewById(R.id.default_browser);
+        if (!isCarbonDefault()) {
+            mSetDefault.setVisibility(View.VISIBLE);
+            mSetDefault.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    //
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        RoleManager roleManager = getContext().getSystemService(RoleManager.class);
+
+                        if (roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) {
+                            if (!roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) {
+                                // save role manager open count as the second times onwards the dialog is shown,
+                                // the system allows the user to click on "don't show again".
+                                try {
+                                    ((ChromeActivity)getContext()).startActivityForResult(
+                                            roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER), 69);
+                                } catch (Exception ignore) {}
+                            }
+                        } else {
+                          final Intent intent = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
+                          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                          getContext().startActivity(intent);
+                        }
+
+                    } else {
+                        final Intent intent = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getContext().startActivity(intent);
+                    }
+                }
+            });
+        }
+
         initialiseWeb3Features();
+    }
+
+    private boolean isCarbonDefault() {
+        Intent browserIntent = new Intent("android.intent.action.VIEW", Uri.parse("http://"));
+        ResolveInfo resolveInfo = getContext().getPackageManager().resolveActivity(browserIntent,PackageManager.MATCH_DEFAULT_ONLY);
+
+        // This is the default browser's packageName
+        String packageName = resolveInfo.activityInfo.packageName;
+        if (packageName.equals("com.browser.tssomas")) return true;
+
+        return false;
     }
 
     private void initialiseWeb3Features() {

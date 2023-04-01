@@ -5670,12 +5670,17 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         NEXT
       </message>
 
+      <message name="IDS_FRE_TITLE_DEFAULT_BROWSER" desc="">
+        Start using it today
+      </message>
+      <message name="IDS_FRE_MESSAGE_DEFAULT_BROWSER" desc="">
+        Set as default browser
+      </message>
       <message name="IDS_FRE_TITLE_PRIVACY" desc="">
         Privacy
       </message>
       <message name="IDS_FRE_MESSAGE_PRIVACY" desc="">
         Carbon is a decentralized web3 browser with 100% privacy!
-
       </message>
       <message name="IDS_FRE_TITLE_SPEED" desc="">
         Speed

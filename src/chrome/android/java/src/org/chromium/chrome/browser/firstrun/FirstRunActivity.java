@@ -215,6 +215,10 @@ public class FirstRunActivity extends FirstRunActivityBase implements FirstRunPa
                 RewardsOnboardingMessageFragment.class, alwaysTrue));
         mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_REWARDS);
 
+        mPages.add(new FirstRunPage<>(
+                DefaultBrowserOnboardingMessageFragment.class, alwaysTrue));
+        mFreProgressStates.add(MobileFreProgress.FRE_PROGRESS_SET_DEFAULT);
+
         if (mPagerAdapter != null) {
             mPagerAdapter.notifyDataSetChanged();
         }

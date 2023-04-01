@@ -30,6 +30,7 @@ import java.lang.annotation.RetentionPolicy;
         MobileFreProgress.FRE_PROGRESS_PRIVACY,
         MobileFreProgress.FRE_PROGRESS_SPEED,
         MobileFreProgress.FRE_PROGRESS_REWARDS,
+        MobileFreProgress.FRE_PROGRESS_SET_DEFAULT,
         MobileFreProgress.MAX,
 })
 @Retention(RetentionPolicy.SOURCE)
@@ -56,5 +57,6 @@ public @interface MobileFreProgress {
     int FRE_PROGRESS_PRIVACY = 12;
     int FRE_PROGRESS_SPEED = 13;
     int FRE_PROGRESS_REWARDS = 14;
-    int MAX = 15;
+    int FRE_PROGRESS_SET_DEFAULT = 15;
+    int MAX = 16;
 }

@@ -125,7 +125,7 @@ class GlobalNightModeStateController implements NightModeStateProvider,
         mSharedPreferencesManager.removeObserver(mPreferenceObserver);
     }
 
-    private void updateNightMode() {
+    public void updateNightMode() {
         boolean powerSaveModeOn = mPowerSaveModeMonitor.powerSavingIsOn();
         final int theme = NightModeUtils.getThemeSetting();
         final boolean newNightModeOn = theme == ThemeType.SYSTEM_DEFAULT

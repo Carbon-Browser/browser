@@ -534,9 +534,10 @@
                   android:layout_gravity="center" />
             </LinearLayout>
 
-            <FrameLayout
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
               <TextView
                 android:id="@+id/news_title"
@@ -548,6 +549,28 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="start"
                 android:text="@string/ntp_news_title"/>
+
+              <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"/>
+
+              <TextView
+                android:id="@+id/default_browser"
+                android:text="Set default"
+                android:gravity="center"
+                android:textStyle="bold|italic"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:fontFamily="sans-serif"
+                android:layout_gravity="end"
+                android:layout_marginEnd="6dp"
+                android:textSize="12sp"
+                android:textColor="@android:color/white"
+                android:background="@drawable/carbon_button_bg"
+                android:layout_width="wrap_content"
+                android:visibility="gone"
+                android:layout_height="24dp"/>
 
               <TextView
                 android:id="@+id/switch_theme"
@@ -563,7 +586,7 @@
                 android:background="@drawable/carbon_button_bg"
                 android:layout_width="wrap_content"
                 android:layout_height="24dp"/>
-            </FrameLayout>
+            </LinearLayout>
 
             <!-- end -->
             <androidx.recyclerview.widget.RecyclerView
