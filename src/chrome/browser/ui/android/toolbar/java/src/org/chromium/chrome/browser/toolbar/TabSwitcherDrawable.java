@@ -22,6 +22,13 @@ import org.chromium.components.browser_ui.widget.TintedDrawable;
 
 import java.util.Locale;
 
+import android.graphics.RectF;
+import android.graphics.Paint;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
+import android.graphics.PorterDuffXfermode;
+import android.graphics.PorterDuff;
+
 /**
  * A drawable for the tab switcher icon.
  */
@@ -36,6 +43,8 @@ public class TabSwitcherDrawable extends TintedDrawable {
     private int mTabCount;
     private boolean mIncognito;
 
+    private float density;
+
     /**
      * Creates a {@link TabSwitcherDrawable}.
      * @param context A {@link Context} instance.
@@ -46,7 +55,7 @@ public class TabSwitcherDrawable extends TintedDrawable {
             Context context, @BrandedColorScheme int brandedColorScheme) {
         Bitmap icon = BitmapFactory.decodeResource(
                 context.getResources(), R.drawable.btn_tabswitcher_modern);
-        return new TabSwitcherDrawable(context, brandedColorScheme, null);
+        return new TabSwitcherDrawable(context, brandedColorScheme, icon);
     }
 
     private TabSwitcherDrawable(
@@ -57,6 +66,8 @@ public class TabSwitcherDrawable extends TintedDrawable {
                 context.getResources().getDimension(R.dimen.toolbar_tab_count_text_size_1_digit);
         mDoubleDigitTextSize =
                 context.getResources().getDimension(R.dimen.toolbar_tab_count_text_size_2_digit);
+
+        density = context.getResources().getDisplayMetrics().density;
 
         mTextPaint = new TextPaint();
         mTextPaint.setAntiAlias(true);
@@ -76,11 +87,25 @@ public class TabSwitcherDrawable extends TintedDrawable {
     public void draw(Canvas canvas) {
         super.draw(canvas);
 
+        Rect drawableBounds = getBounds();
+
+        RectF boundsF = new RectF(drawableBounds);
+        int padding = Math.round(density*4);
+        // boundsF.top = boundsF.top-padding;
+        // boundsF.bottom = boundsF.bottom+padding;
+        // boundsF.left = boundsF.left-padding;
+        // boundsF.right = boundsF.right+padding;
+
+        Paint paint = new Paint();
+        LinearGradient shader = new LinearGradient(0, 0, 0, drawableBounds.height(), 0xFFFF882F, 0xFFFF2C07, Shader.TileMode.CLAMP);
+        paint.setShader(shader);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawRoundRect(boundsF, 14f, 14f, paint);
+
         String textString = getTabCountString();
         if (!textString.isEmpty()) {
             mTextPaint.getTextBounds(textString, 0, textString.length(), mTextBounds);
 
-            Rect drawableBounds = getBounds();
             int textX = drawableBounds.width() / 2;
             int textY = drawableBounds.height() / 2 + (mTextBounds.bottom - mTextBounds.top) / 2
                     - mTextBounds.bottom;

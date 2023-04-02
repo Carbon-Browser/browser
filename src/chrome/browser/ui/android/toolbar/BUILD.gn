@@ -250,6 +250,7 @@ android_resources("java_resources") {
     "java/res/drawable-xxxhdpi/incognito_switch.png",
     "java/res/drawable-xxxhdpi/popup_bg_bottom.9.png",
     "java/res/drawable/modern_toolbar_text_box_background_with_primary_color.xml",
+    "java/res/drawable/tab_switcher_background_padded.xml",
     "java/res/drawable/new_tab_icon.xml",
     "java/res/layout/adaptive_toolbar_header_preference.xml",
     "java/res/layout/bottom_control_container.xml",

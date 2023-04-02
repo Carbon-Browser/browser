@@ -57,20 +57,15 @@
             android:layout_width="52dp"
             style="@style/ToolbarButton" />
 
-        <FrameLayout
-            android:background="@drawable/tab_switcher_background_padded"
+        <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton
+            android:id="@+id/tab_switcher_button"
             style="@style/ToolbarButton"
+            android:layout_gravity="center"
             android:layout_marginStart="6dp"
-            android:layout_gravity="center">
-
-            <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton
-                android:id="@+id/tab_switcher_button"
-                style="@style/ToolbarButton"
-                android:layout_gravity="center"
-                android:contentDescription="@string/accessibility_toolbar_btn_tabswitcher_toggle_default"
-                app:menuMaxWidth="@dimen/tab_switcher_menu_width"
-                app:menuVerticalOverlapAnchor="false" />
-        </FrameLayout>
+            android:gravity="center"
+            android:contentDescription="@string/accessibility_toolbar_btn_tabswitcher_toggle_default"
+            app:menuMaxWidth="@dimen/tab_switcher_menu_width"
+            app:menuVerticalOverlapAnchor="false" />
 
         <include layout="@layout/menu_button"/>
 

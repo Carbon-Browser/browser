@@ -790,7 +790,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
                     // The positioning of elements may have been changed (since the elements expand
                     // to fill the available vertical space), so adjust the scroll.
-                    mScrollDelegate.snapScroll();
+                    // mScrollDelegate.snapScroll();
                 });
         TraceEvent.end(TAG + ".initializeLayoutChangeListener()");
     }

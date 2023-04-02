@@ -178,7 +178,7 @@ public class MainSettings extends PreferenceFragmentCompat
         updatePreferences();
     }
 
-    private boolean isSFBDefault() {
+    private boolean isCarbonDefault() {
         Intent browserIntent = new Intent("android.intent.action.VIEW", Uri.parse("http://"));
         ResolveInfo resolveInfo = getActivity().getPackageManager().resolveActivity(browserIntent,PackageManager.MATCH_DEFAULT_ONLY);
 
@@ -290,8 +290,8 @@ public class MainSettings extends PreferenceFragmentCompat
         removePreferenceIfPresent(PREF_ACCOUNT_AND_GOOGLE_SERVICES_SECTION);
         removePreferenceIfPresent(PREF_SYNC_PROMO);
 
-        final boolean isSFBDefault = isSFBDefault();
-        if (isSFBDefault) {
+        final boolean isCarbonDefault = isCarbonDefault();
+        if (isCarbonDefault) {
             removePreferenceIfPresent(PREF_MAKE_DEFAULT);
         } else {
             Preference makeSFBDefault = findPreference(PREF_MAKE_DEFAULT);
