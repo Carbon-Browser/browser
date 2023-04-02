@@ -610,6 +610,7 @@ public class FeedSurfaceCoordinator
             // XSurface returns a View, but it should be a RecyclerView.
             view = (RecyclerView) mHybridListRenderer.bind(mContentManager, mViewportView);
             view.setId(R.id.feed_stream_recycler_view);
+            view.setDescendantFocusability(android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS);
             view.setClipToPadding(false);
             view.setBackgroundColor(android.graphics.Color.parseColor("#272626"));//SemanticColorUtils.getDefaultBgColor(mActivity));
 
