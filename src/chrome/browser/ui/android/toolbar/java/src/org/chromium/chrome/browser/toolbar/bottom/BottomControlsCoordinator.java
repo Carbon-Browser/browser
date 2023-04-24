@@ -39,6 +39,21 @@ import android.content.res.ColorStateList;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.chrome.browser.theme.ThemeUtils;
 import androidx.appcompat.content.res.AppCompatResources;
+import org.chromium.chrome.browser.toolbar.circlemenu.widget.FloatingActionButton;
+import org.chromium.chrome.browser.toolbar.circlemenu.ArcMenu;
+import android.widget.PopupWindow;
+import android.os.Build;
+import android.view.WindowManager;
+import android.graphics.Rect;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import java.lang.Runnable;
+import android.os.Handler;
+import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.incognito.IncognitoUtils;
+import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
 
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
@@ -47,7 +62,8 @@ import androidx.appcompat.content.res.AppCompatResources;
  * when the controls are being scrolled off-screen. The Android version does not draw unless the
  * controls offset is 0.
  */
-public class BottomControlsCoordinator implements BackPressHandler, BottomToolbarVisibilityController, BottomToolbarThemeCommunicator {
+public class BottomControlsCoordinator implements BackPressHandler, BottomToolbarVisibilityController,
+      BottomToolbarThemeCommunicator, FullscreenManager.Observer {
     /**
      * Interface for the BottomControls component to hide and show itself.
      */
@@ -61,7 +77,11 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     /** The Delegate for the split toolbar's bottom toolbar component UI operation. */
     private @Nullable BottomControlsContentDelegate mContentDelegate;
 
-    private View mBottomToolbarWrapper;
+    // private View mBottomToolbarWrapper;
+    private View mBottomToolbarCurve;
+    private View mBottomToolbarWrapperLeft;
+    private View mBottomToolbarWrapperRight;
+    private View mBottomToolbarWrapperBottom;
     private View mContainer;
     private ChromeImageButton mSearchAccelerator;
     // private ChromeImageButton mSpeedDialButton;
@@ -69,11 +89,24 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     private ChromeImageButton mSettingsButton;
     private ChromeImageButton mRewardsButton;
     private ToggleTabStackButton mTabSwitcherButton;
+
+    private View mCarbonActionButton;
+
     /** Used to know the Layout state. */
     private LayoutStateProvider mLayoutStateProvider;
     private final LayoutStateProvider.LayoutStateObserver mLayoutStateObserver;
 
     private TabModelSelector mTabModelSelector;
+
+    @Override
+    public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
+        mCarbonActionButton.setVisibility(View.GONE);
+    }
+
+    @Override
+    public void onExitFullscreen(Tab tab) {
+        mCarbonActionButton.setVisibility(View.VISIBLE);
+    }
 
     /**
      * Build the coordinator that manages the bottom controls.
@@ -110,8 +143,13 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         // View container = root.findViewById(R.id.bottom_container_slot);
         // ViewGroup.LayoutParams params = container.getLayoutParams();
         // params.height = root.getResources().getDimensionPixelOffset(bottomControlsHeightId);
-        mBottomToolbarWrapper = root.findViewById(R.id.bottom_toolbar_wrapper);
+        // mBottomToolbarWrapper = root.findViewById(R.id.bottom_toolbar_wrapper);
+        mBottomToolbarWrapperLeft = root.findViewById(R.id.bottom_toolbar_wrapper_left);
+        mBottomToolbarWrapperRight = root.findViewById(R.id.bottom_toolbar_wrapper_right);
+        mBottomToolbarWrapperBottom = root.findViewById(R.id.middle_spacer_bottom);
+        mBottomToolbarCurve = root.findViewById(R.id.middle_space_curve);
         mContainer = root.findViewById(R.id.bottom_container_slot);
+        fullscreenManager.addObserver(this);
         mMediator =
                 new BottomControlsMediator(windowAndroid, model, controlsSizer, fullscreenManager,
                         root.getResources().getDimensionPixelOffset(bottomControlsHeightId),
@@ -141,6 +179,146 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             mTabSwitcherButton.setTabCountProvider(tabCountProvider);
         }
 
+        mCarbonActionButton = root.findViewById(R.id.carbon_action_button);
+        mCarbonActionButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+              PopupWindow mPopup = new PopupWindow(v.getContext());
+              mPopup.setFocusable(true);
+              mPopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                  // The window layout type affects the z-index of the popup window on M+.
+                  mPopup.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
+              }
+
+              mPopup.setBackgroundDrawable(new ColorDrawable(
+                Color.TRANSPARENT));
+
+              Rect bgPadding = new Rect();
+              mPopup.getBackground().getPadding(bgPadding);
+
+              int menuWidth = root.getMeasuredWidth();
+              int popupWidth = menuWidth + bgPadding.left + bgPadding.right;
+              mPopup.setWidth(popupWidth);
+
+              /*Display display = mActivity.getWindowManager().getDefaultDisplay();
+              Point size = new Point();
+              display.getSize(size);
+              contentView.measure(size.x, size.y);*/
+
+              // mPopup.setAnimationStyle(R.style.RewardsPopupAnimation);
+
+              int[] location = new int[2];
+              v.getLocationInWindow(location);
+
+              ArcMenu menu = (ArcMenu) LayoutInflater.from(v.getContext()).inflate(R.layout.carbon_action_button, null);
+              // ArcMenu menu = root.findViewById(R.id.carbon_action_button);
+              menu.setToolTipSide(ArcMenu.TOOLTIP_LEFT);
+
+              menu.findViewById(R.id.fabArcMenu).setOnClickListener(new View.OnClickListener() {
+                  @Override
+                  public void onClick(View v) {
+                    menu.menuOnclickMethod();
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                           mPopup.dismiss();
+                        }
+                    }, 500);
+                  }
+              });
+
+              FloatingActionButton mWalletItem = new FloatingActionButton(root.getContext());
+              mWalletItem.setSize(FloatingActionButton.SIZE_MINI);
+              mWalletItem.setIcon(R.drawable.ic_action_wallet);
+              menu.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+            	menu.addItem(mWalletItem, "", new View.OnClickListener() {
+              		@Override
+              		public void onClick(View v) {
+                    Toast.makeText(v.getContext(), "Coming soon!", Toast.LENGTH_SHORT).show();
+                    menu.menuOnclickMethod();
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                           mPopup.dismiss();
+                        }
+                    }, 500);
+                  }
+            	});
+
+              FloatingActionButton mStakingItem = new FloatingActionButton(root.getContext());
+              mStakingItem.setSize(FloatingActionButton.SIZE_MINI);
+              mStakingItem.setIcon(R.drawable.ic_action_staking);
+            	menu.addItem(mStakingItem, "", new View.OnClickListener() {
+              		@Override
+              		public void onClick(View v) {
+              		   BottomToolbarCoordinator.loadUrl("https://stake.carbon.website", v);
+                     menu.menuOnclickMethod();
+                     new Handler().postDelayed(new Runnable() {
+                         @Override
+                         public void run() {
+                            mPopup.dismiss();
+                         }
+                     }, 500);
+              		}
+            	});
+
+              FloatingActionButton mSwapsItem = new FloatingActionButton(root.getContext());
+              mSwapsItem.setSize(FloatingActionButton.SIZE_MINI);
+              mSwapsItem.setIcon(R.drawable.ic_action_swaps);
+            	menu.addItem(mSwapsItem, "", new View.OnClickListener() {
+              		@Override
+              		public void onClick(View v) {
+                     Toast.makeText(v.getContext(), "Coming soon!", Toast.LENGTH_SHORT).show();
+                     menu.menuOnclickMethod();
+                     new Handler().postDelayed(new Runnable() {
+                         @Override
+                         public void run() {
+                            mPopup.dismiss();
+                         }
+                     }, 500);
+              		}
+            	});
+
+              FloatingActionButton mRewardsItem = new FloatingActionButton(root.getContext());
+              mRewardsItem.setSize(FloatingActionButton.SIZE_MINI);
+              mRewardsItem.setIcon(R.drawable.ic_action_rewards);
+            	menu.addItem(mRewardsItem, "", new View.OnClickListener() {
+              		@Override
+              		public void onClick(View v) {
+              		   BottomToolbarCoordinator.openRewardsPopup(v);
+                     mPopup.dismiss();
+              		}
+            	});
+
+              mPopup.setContentView(menu);
+              try {
+                  mPopup.showAtLocation(root.findViewById(R.id.carbon_action_button),
+                          Gravity.NO_GRAVITY, location[0], (location[1]));
+              } catch (Exception ignore) {}
+              new Handler().postDelayed(new Runnable() {
+                  @Override
+                  public void run() {
+                     menu.menuOnclickMethod();
+
+                     ((View)menu.getParent()).setOnClickListener(new View.OnClickListener() {
+                         @Override
+                         public void onClick(View v) {
+                           menu.menuOnclickMethod();
+                           new Handler().postDelayed(new Runnable() {
+                               @Override
+                               public void run() {
+                                  mPopup.dismiss();
+                               }
+                           }, 500);
+                         }
+                     });
+                  }
+              }, 100);
+            }
+        });
+
         mSettingsButton = root.findViewById(R.id.settings_button_bottom);
         mSettingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -166,16 +344,16 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             }
         });
 
-        mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
-        if (mRewardsButton != null) {
-            mRewardsButton.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    // do callback
-                    BottomToolbarCoordinator.openRewardsPopup(v);
-                }
-            });
-        }
+        // mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
+        // if (mRewardsButton != null) {
+        //     mRewardsButton.setOnClickListener(new View.OnClickListener() {
+        //         @Override
+        //         public void onClick(View v) {
+        //             // do callback
+        //             BottomToolbarCoordinator.openRewardsPopup(v);
+        //         }
+        //     });
+        // }
 
         // Set the visibility of BottomControls to false by default. Components within
         // BottomControls should update the visibility explicitly if needed.
@@ -230,8 +408,14 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
     @Override
     public void onThemeChanged(int color) {
-        if (mBottomToolbarWrapper == null) return;
-        mBottomToolbarWrapper.setBackgroundColor(color);
+        if (mBottomToolbarWrapperLeft == null) return;
+        // mBottomToolbarWrapper.setBackgroundColor(color);
+        // ApiCompatibilityUtils.setImageTintList(mBottomToolbarCurve, color);
+        mBottomToolbarCurve.setBackground(mTabSwitcherButton.isIncognito() ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_incognito) : isColorDark(color) ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_dark) :
+          mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_light));
+        mBottomToolbarWrapperLeft.setBackgroundColor(color);
+        mBottomToolbarWrapperRight.setBackgroundColor(color);
+        mBottomToolbarWrapperBottom.setBackgroundColor(color);
 
         ColorStateList tint = isColorDark(color) ? AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_light_tint_list)
                         : AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_dark_tint_list);
@@ -297,7 +481,11 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     public void destroy() {
         if (mContentDelegate != null) mContentDelegate.destroy();
 
-        if (mBottomToolbarWrapper != null) mBottomToolbarWrapper = null;
+        // if (mBottomToolbarWrapper != null) mBottomToolbarWrapper = null;
+        if (mBottomToolbarWrapperLeft != null) mBottomToolbarWrapperLeft = null;
+        if (mBottomToolbarWrapperRight != null) mBottomToolbarWrapperRight = null;
+        if (mBottomToolbarWrapperBottom != null) mBottomToolbarWrapperBottom = null;
+        if (mBottomToolbarCurve != null) mBottomToolbarCurve = null;
         if (mContainer != null) mContainer = null;
         if (mLayoutStateProvider != null) {
             mLayoutStateProvider.removeObserver(mLayoutStateObserver);

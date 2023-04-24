@@ -40,7 +40,6 @@ chrome_java_resources = [
   "java/res/drawable/ic_offer_tag.xml",
   "java/res/drawable/ic_trending_down_black.xml",
   "java/res/drawable/material_tooltip_background.xml",
-  "java/res/drawable/tab_switcher_background_padded.xml",
   "java/res/drawable/ic_carbon_text.xml",
   "java/res/drawable/padded_adblock_button_background.xml",
   "java/res/drawable/ic_block_red.xml",

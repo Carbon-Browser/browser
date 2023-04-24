@@ -32,6 +32,8 @@ public class ToggleTabStackButton
     private OnClickListener mTabSwitcherListener;
     private OnLongClickListener mTabSwitcherLongClickListener;
 
+    private boolean mIsIncognito;
+
     public ToggleTabStackButton(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
     }
@@ -90,6 +92,11 @@ public class ToggleTabStackButton
     public void onTabCountChanged(int numberOfTabs, boolean isIncognito) {
         setEnabled(numberOfTabs >= 1);
         mTabSwitcherButtonDrawable.updateForTabCount(numberOfTabs, isIncognito);
+        mIsIncognito = isIncognito;
+    }
+
+    public boolean isIncognito() {
+      return mIsIncognito;
     }
 
     @Override

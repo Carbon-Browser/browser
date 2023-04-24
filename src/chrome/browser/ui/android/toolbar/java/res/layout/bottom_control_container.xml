@@ -11,21 +11,33 @@
     android:background="@android:color/transparent"
     android:layout_height="wrap_content" >
 
+    <View
+      android:id="@+id/carbon_action_button"
+      android:layout_height="56dp"
+      android:layout_width="56dp"
+      android:translationZ="20dp"
+      android:layout_gravity="bottom|center"
+      android:background="@drawable/ic_center_action_button"
+      android:layout_marginBottom="20dp" />
+
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:id="@+id/bottom_controls_wrapper"
+        android:layout_gravity="bottom|center"
+        android:gravity="bottom"
         android:background="@android:color/transparent"
         android:layout_height="wrap_content" >
 
-        <ImageView
+        <!-- <ImageView
             android:id="@+id/bottom_container_top_shadow"
             android:layout_width="match_parent"
             android:layout_height="@dimen/toolbar_shadow_height"
+            android:layout_gravity="bottom|center"
             android:src="@drawable/modern_toolbar_shadow"
             android:scaleType="fitXY"
             android:scaleY="-1"
-            tools:ignore="ContentDescription" />
+            tools:ignore="ContentDescription" /> -->
 
         <FrameLayout
             android:layout_width="match_parent"
@@ -38,90 +50,124 @@
             android:layout_width="match_parent"
             android:layout_height="@dimen/min_touch_target_size"
             android:id="@+id/bottom_toolbar_wrapper"
-            android:background="@android:color/white"
+            android:background="@android:color/transparent"
             android:orientation="horizontal">
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+              <LinearLayout
+                  android:layout_height="match_parent"
+                  android:layout_width="0dp"
+                  android:layout_weight="1"
+                  android:id="@+id/bottom_toolbar_wrapper_left"
+                  android:orientation="horizontal">
 
-                <!-- <org.chromium.ui.widget.ChromeImageButton
-                    android:id="@+id/bottom_speed_dial_button"
-                    android:src="@drawable/ic_speed_dial_black"
-                    app:tint="@color/toolbar_icon_tint_dark"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    tools:ignore="ContentDescription"
-                    style="@style/SplitToolbarButton" /> -->
+                  <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" />
 
-                <org.chromium.ui.widget.ChromeImageButton
-                    android:id="@+id/bottom_home_button"
-                    android:src="@drawable/ic_home"
-                    app:tint="@color/default_icon_color_dark_tint_list"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    tools:ignore="ContentDescription"
-                    style="@style/SplitToolbarButton" />
+                  <!-- <org.chromium.ui.widget.ChromeImageButton
+                      android:id="@+id/bottom_speed_dial_button"
+                      android:src="@drawable/ic_speed_dial_black"
+                      app:tint="@color/toolbar_icon_tint_dark"
+                      android:background="?attr/selectableItemBackgroundBorderless"
+                      tools:ignore="ContentDescription"
+                      style="@style/SplitToolbarButton" /> -->
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                  <org.chromium.ui.widget.ChromeImageButton
+                      android:id="@+id/bottom_home_button"
+                      android:src="@drawable/ic_home"
+                      app:tint="@color/default_icon_color_dark_tint_list"
+                      android:background="?attr/selectableItemBackgroundBorderless"
+                      tools:ignore="ContentDescription"
+                      style="@style/SplitToolbarButton" />
 
-                <org.chromium.ui.widget.ChromeImageButton
-                    android:id="@+id/search_accelerator"
-                    style="@style/SplitToolbarButton"
-                    android:layout_gravity="center"
-                    android:contentDescription="@null"
-                    app:tint="@color/default_icon_color_dark_tint_list"
-                    android:src="@drawable/ic_search"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
+                  <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" />
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1"/>
+                  <org.chromium.ui.widget.ChromeImageButton
+                      android:id="@+id/search_accelerator"
+                      style="@style/SplitToolbarButton"
+                      android:layout_gravity="center"
+                      android:contentDescription="@null"
+                      app:tint="@color/default_icon_color_dark_tint_list"
+                      android:src="@drawable/ic_search"
+                      android:background="?attr/selectableItemBackgroundBorderless" />
 
-                <!-- <org.chromium.ui.widget.ChromeImageButton
-                    android:id="@+id/carbon_action_button"
-                    android:layout_width="70dp"
-                    android:layout_height="70dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="@null"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/ic_center_action_button"/> -->
+                  <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" />
+              </LinearLayout>
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+              <FrameLayout
+                android:layout_width="80dp"
+                android:layout_height="@dimen/min_touch_target_size">
 
-                <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton
-                    android:id="@+id/tab_switcher_button_bottom"
-                    style="@style/ToolbarButton"
-                    android:layout_marginStart="6dp"
-                    android:background="@drawable/tab_switcher_background_padded"
-                    android:layout_gravity="center"
-                    android:contentDescription="@string/accessibility_toolbar_btn_tabswitcher_toggle_default"
-                    app:menuMaxWidth="@dimen/tab_switcher_menu_width"
-                    app:menuVerticalOverlapAnchor="false" />
+                <View
+                    android:id="@+id/middle_space_curve"
+                    android:layout_width="80dp"
+                    android:background="@drawable/middle_curved_background_dark"
+                    android:layout_marginBottom="8dp"
+                    android:layout_gravity="bottom|center"
+                    android:layout_height="match_parent"/>
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                <View
+                    android:id="@+id/middle_spacer_bottom"
+                    android:layout_width="80dp"
+                    android:background="#2C2C2C"
+                    android:layout_gravity="bottom|center"
+                    android:layout_height="8dp"/>
+              </FrameLayout>
 
-                <org.chromium.ui.widget.ChromeImageButton
-                    android:id="@+id/settings_button_bottom"
-                    android:scaleType="centerInside"
-                    android:src="@drawable/ic_settings_bottom"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription=""
-                    style="@style/SplitToolbarButton"/>
+              <LinearLayout
+                  android:layout_height="match_parent"
+                  android:layout_width="0dp"
+                  android:layout_weight="1"
+                  android:id="@+id/bottom_toolbar_wrapper_right"
+                  android:orientation="horizontal">
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                  <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" />
+
+                  <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton
+                      android:id="@+id/tab_switcher_button_bottom"
+                      style="@style/ToolbarButton"
+                      android:layout_marginStart="6dp"
+                      android:layout_gravity="center"
+                      android:contentDescription="@string/accessibility_toolbar_btn_tabswitcher_toggle_default"
+                      app:menuMaxWidth="@dimen/tab_switcher_menu_width"
+                      app:menuVerticalOverlapAnchor="false" />
+
+                  <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" />
+
+                  <org.chromium.ui.widget.ChromeImageButton
+                      android:id="@+id/settings_button_bottom"
+                      android:scaleType="centerInside"
+                      android:src="@drawable/ic_settings_bottom"
+                      android:background="?attr/selectableItemBackgroundBorderless"
+                      android:contentDescription=""
+                      style="@style/SplitToolbarButton"/>
+
+                  <!-- <org.chromium.ui.widget.ChromeImageButton
+                       android:id="@+id/rewards_button_bottom"
+                       android:scaleType="centerInside"
+                       android:src="@drawable/padded_adblock_button_background"
+                       android:background="?attr/selectableItemBackgroundBorderless"
+                       android:contentDescription=""
+                       style="@style/SplitToolbarButton"/> -->
+
+                  <Space
+                      android:layout_width="0dp"
+                      android:layout_height="1dp"
+                      android:layout_weight="1" />
+              </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 

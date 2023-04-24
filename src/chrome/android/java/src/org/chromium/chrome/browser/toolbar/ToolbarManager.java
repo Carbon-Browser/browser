@@ -1301,6 +1301,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
      */
     public void enableBottomControls() {
         View root = ((ViewStub) mActivity.findViewById(R.id.bottom_controls_stub)).inflate();
+        root.setBackgroundColor(Color.TRANSPARENT);
         mTabGroupUi = TabManagementModuleProvider.getDelegate().createTabGroupUi(mActivity,
                 root.findViewById(R.id.bottom_container_slot), mIncognitoStateProvider,
                 mScrimCoordinator, mOmniboxFocusStateSupplier, mBottomSheetController,
@@ -1469,9 +1470,8 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
     @Override
     public void openSettings(View v) {
-        // SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
-        // settingsLauncher.launchSettingsActivity(v.getContext());
-        showRewardsPopup(v);
+        SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
+        settingsLauncher.launchSettingsActivity(v.getContext());
     }
 
     @Override
