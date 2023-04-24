@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<org.chromium.chrome.browser.toolbar.circlemenu.ArcMenu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/carbon_action_button_main"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:contentDescription="@null"
+    android:layout_centerHorizontal="true"
+    android:layout_alignParentBottom="true"
+    android:translationZ="25dp"
+    android:paddingBottom="16dp"
+    android:layout_gravity="bottom|center"
+    app:menuType="normal"
+    app:menuChildSize="48dp"
+    app:menuGravityCarbon="Bottom_Middle"
+    app:menuClickAnim="false"
+    app:menuChildAnim="false"
+    app:menuShadowElevation="false"/>

@@ -54,6 +54,8 @@
     </style>
     <style name="FilledButton.Flat" tools:ignore="UnusedResources">
         <item name="buttonRaised">false</item>
+        <item name="buttonColor">#FF5D1D</item>
+        <item name="buttonTextColor">@android:color/white</item>
     </style>
     <style name="TextButton" parent="ButtonCompatBase" tools:ignore="UnusedResources">
         <item name="android:paddingStart">8dp</item>

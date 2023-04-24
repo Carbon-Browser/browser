@@ -788,6 +788,8 @@ public class CompositorViewHolder extends FrameLayout
                                 ? mBrowserControlsManager.getTopControlsMinHeight()
                                         + mBrowserControlsManager.getBottomControlsMinHeight()
                                 : 0);
+        // int controlsHeight = mBrowserControlsManager != null
+        //                 ? mBrowserControlsManager.getBottomControlsHeightCarbon() : 0;
         int controlsHeight = mControlsResizeView
                 ? getTopControlsHeightPixels() + getBottomControlsHeightPixels()
                 : totalMinHeight;
@@ -1248,7 +1250,7 @@ public class CompositorViewHolder extends FrameLayout
     public int getBottomControlsHeightPixels() {
         return getKeyboardBottomInsetForControlsPixels()
                 + (mBrowserControlsManager != null
-                                ? mBrowserControlsManager.getBottomControlsHeight()
+                                ? 0//mBrowserControlsManager.getBottomControlsHeight()
                                 : 0);
     }
 

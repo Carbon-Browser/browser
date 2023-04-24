@@ -8,6 +8,31 @@ import("//chrome/browser/buildflags.gni")
 
 android_library("java") {
   sources = [
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/anim/AnimationObject.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/anim/RotateAndTranslateAnimation.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/anim/ViewAnim.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/app/ThemeManager.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/drawable/LineMorphingDrawable.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/drawable/OvalShadowDrawable.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/drawable/RippleDrawable.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/interfaces/ScrollDirectionListener.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/util/ColorUtil.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/util/Util.java",
+
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/widget/ArcLayout.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/widget/FloatingActionButton.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/widget/MoveUpwardBehavior.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/widget/ObservableScrollView.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/widget/RippleManager.java",
+
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/AbsListViewScrollDetector.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/ArcMenu.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/RecyclerViewScrollDetector.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/ScrollViewScrollDetector.java",
+    "java/src/org/chromium/chrome/browser/toolbar/circlemenu/TextStructure.java",
+
+
+
     "java/src/org/chromium/chrome/browser/toolbar/ButtonData.java",
     "java/src/org/chromium/chrome/browser/toolbar/ButtonDataImpl.java",
     "java/src/org/chromium/chrome/browser/toolbar/ButtonDataProvider.java",
@@ -263,6 +288,8 @@ android_resources("java_resources") {
     "java/res/layout/tab_switcher_toolbar.xml",
     "java/res/layout/toolbar_phone.xml",
     "java/res/layout/toolbar_tablet.xml",
+    "java/res/layout/arc_menu.xml",
+    "java/res/layout/carbon_action_button.xml",
     "java/res/values-night/drawables.xml",
     "java/res/values-sw600dp/dimens.xml",
     "java/res/values/dimens.xml",
@@ -271,6 +298,14 @@ android_resources("java_resources") {
     "java/res/values/styles.xml",
     "java/res/values/values.xml",
     "java/res/xml/adaptive_toolbar_preference.xml",
+    "java/res/values/attrs.xml",
+    "java/res/drawable-xhdpi/ic_action_wallet.png",
+    "java/res/drawable-xhdpi/ic_action_rewards.png",
+    "java/res/drawable-xhdpi/ic_action_swaps.png",
+    "java/res/drawable-xhdpi/ic_action_staking.png",
+    "java/res/drawable/middle_curved_background_light.xml",
+    "java/res/drawable/middle_curved_background_incognito.xml",
+    "java/res/drawable/middle_curved_background_dark.xml",
   ]
 
   deps = [

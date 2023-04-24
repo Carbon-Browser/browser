@@ -104,7 +104,7 @@ class BottomControlsMediator implements BrowserControlsStateProvider.Observer,
         layoutStateProvider.addObserver(this);
     }
 
-    void setBottomControlsVisible(boolean visible) {
+    public void setBottomControlsVisible(boolean visible) {
         // RESIZE TOP CONTROLS
         mBottomToolbarVisibilityController.setBottomToolbarTopSectionVisible(visible);
         mIsShowingBottomControls = visible;

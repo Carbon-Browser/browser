@@ -13,4 +13,6 @@ public interface BottomToolbarCoordinator {
     void loadHomepage(View v);
 
     void openSettings(View v);
+
+    void loadUrl(String url, View v);
 }
