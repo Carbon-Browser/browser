@@ -74,7 +74,6 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
 
     private boolean mIsDarkMode;
 
-
     // data is passed into the constructor
     public NTPNewsRecyclerAdapter(Context context, boolean isDarkMode) {
         this.mInflater = LayoutInflater.from(context);
@@ -102,25 +101,35 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                     NodeList nodes = doc.getElementsByTagName("item");
 
                     for (int i = 0; i < nodes.getLength(); i++) {
-                        Node node = nodes.item(i);
-                        if (node.getNodeType() == Node.ELEMENT_NODE) {
-                            Element element = (Element) node;
+                        NodeList childNodes = nodes.item(i).getChildNodes();
+                        // if (childNodes.getNodeType() == Node.ELEMENT_NODE) {
+                            String imageUrl = "";
+                            for (int z = 0; z < childNodes.getLength(); z++) {
+                              Element el = (Element)childNodes.item(z);
+                              if (el.hasAttribute("url")) {
+                                  imageUrl = el.getAttribute("url");
+                              }
+                            }
+
+                            Element element = (Element) nodes.item(i);
 
                             String title = getValue("title", element);
                             String url = getValue("link", element);
-                            String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
+                            // String imageUrl = getValue("media:content", element);
+                            // String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
                             String publisher = getValue("source", element);
                             String date = getValue("pubDate", element);
                             if (date != null) {
                               date = date.replaceAll("\\+0000", "");
                             }
 
-                            NewsDataObject dataObj = new NewsDataObject(url, null, title, publisher, date, imageGetterUrl);
+                            NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, null);
 
-                            mDataTemp.add(dataObj);
+                            mData.add(dataObj);
 
-                            fetchImagesFromGetter(i, imageGetterUrl);
-                        }
+                            // fetchImagesFromGetter(i, imageGetterUrl);
+                            notifyItemInserted(mData.size() - 1);
+                        // }
                     }
                 } catch (Exception ignore) {
                     getCountryCode();
@@ -277,25 +286,35 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                         mPrefs.edit().putString("cached_news", result).apply();
 
                         for (int i = 0; i < nodes.getLength(); i++) {
-                            Node node = nodes.item(i);
-                            if (node.getNodeType() == Node.ELEMENT_NODE) {
-                                Element element = (Element) node;
+                            NodeList childNodes = nodes.item(i).getChildNodes();
+                            // if (childNodes.getNodeType() == Node.ELEMENT_NODE) {
+                                String imageUrl = "";
+                                for (int z = 0; z < childNodes.getLength(); z++) {
+                                  Element el = (Element)childNodes.item(z);
+                                  if (el.hasAttribute("url")) {
+                                      imageUrl = el.getAttribute("url");
+                                  }
+                                }
+
+                                Element element = (Element) nodes.item(i);
 
                                 String title = getValue("title", element);
                                 String url = getValue("link", element);
-                                String imageUrl = getValue("media:content", element);
+                                // String imageUrl = getValue("media:content", element);
+                                // String imageGetterUrl = ARTICLE_IMAGE_URL_BASE + url;
                                 String publisher = getValue("source", element);
                                 String date = getValue("pubDate", element);
                                 if (date != null) {
                                   date = date.replaceAll("\\+0000", "");
                                 }
 
-                                NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, imageUrl);
+                                NewsDataObject dataObj = new NewsDataObject(url, imageUrl, title, publisher, date, null);
 
                                 mData.add(dataObj);
 
-                                notifyItemInserted(mDataTemp.size() - 1);
-                            }
+                                // fetchImagesFromGetter(i, imageGetterUrl);
+                                notifyItemInserted(mData.size() - 1);
+                            // }
                         }
 
                         // JSONArray mJsonArray = new JSONArray(result);
@@ -371,7 +390,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
                     dataObj.imageUrl = result;
                     mData.add(dataObj);
 
-                    notifyItemInserted(mDataTemp.size() - 1);
+                    notifyItemInserted(mData.size() - 1);
                 }
             }
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
