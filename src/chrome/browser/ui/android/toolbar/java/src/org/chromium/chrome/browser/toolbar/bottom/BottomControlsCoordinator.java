@@ -56,6 +56,10 @@ import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
 import org.chromium.chrome.browser.toolbar.bottom.MediatorCommunicator;
 
+import android.content.SharedPreferences;
+import org.chromium.base.ContextUtils;
+import android.widget.FrameLayout;
+
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
  * bottom UI that re-sizes the web contents, scrolls off-screen, and hides when the keyboard is
@@ -99,19 +103,35 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
     private TabModelSelector mTabModelSelector;
 
+    SharedPreferences mPrefs;
+
     @Override
     public void setActionButtonVisibility(boolean isVisible) {
-       if (mCarbonActionButton == null) return;
-       mCarbonActionButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+        if (mPrefs == null) {
+           mPrefs = ContextUtils.getAppSharedPreferences();
+        }
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
+        mCarbonActionButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
     }
 
     @Override
     public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
+        if (mPrefs == null) {
+           mPrefs = ContextUtils.getAppSharedPreferences();
+        }
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(View.GONE);
     }
 
     @Override
     public void onExitFullscreen(Tab tab) {
+        if (mPrefs == null) {
+           mPrefs = ContextUtils.getAppSharedPreferences();
+        }
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(View.VISIBLE);
     }
 
@@ -381,6 +401,27 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             public void onStartedHiding(
                     @LayoutType int layoutType, boolean showToolbar, boolean delayAnimation) { }
         };
+
+        if (mPrefs == null) {
+            mPrefs = ContextUtils.getAppSharedPreferences();
+        }
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        if (isCarbonButtonDisabled) {
+            FrameLayout mCarbonButtonContainer = root.findViewById(R.id.carbon_action_button_container);
+            mSettingsButton.setVisibility(View.GONE);
+            mCarbonButtonContainer.setVisibility(View.GONE);
+            mCarbonActionButton.setVisibility(View.GONE);
+
+            ChromeImageButton mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
+            mRewardsButton.setVisibility(View.VISIBLE);
+            mRewardsButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    // do callback
+                    BottomToolbarCoordinator.openRewardsPopup(v);
+                }
+            });
+        }
     }
 
     /**

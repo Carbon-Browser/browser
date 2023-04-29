@@ -107,56 +107,61 @@
         android:order="19"
         android:defaultValue="true"
         android:title="@string/show_news_preference"/>
+    <androidx.preference.CheckBoxPreference
+        android:key="disable_carbon_button"
+        android:order="20"
+        android:defaultValue="false"
+        android:title="@string/use_legacy_toolbar"/>
     <Preference
         android:fragment="org.chromium.components.browser_ui.accessibility.AccessibilitySettings"
         android:key="accessibility"
-        android:order="20"
+        android:order="21"
         android:title="@string/prefs_accessibility"/>
     <Preference
         android:fragment="org.chromium.chrome.browser.language.settings.LanguageSettings"
         android:key="languages"
-        android:order="21"
+        android:order="22"
         android:title="@string/language_settings"/>
     <Preference
         android:fragment="org.chromium.chrome.browser.night_mode.settings.ThemeSettingsFragment"
         android:key="ui_theme"
-        android:order="22"
+        android:order="23"
         android:title="@string/theme_settings" />
     <PreferenceCategory
         android:key="autofill_section"
-        android:order="23"
+        android:order="24"
         android:title="@string/prefs_section_autofill"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:fragment="org.chromium.chrome.browser.password_manager.settings.PasswordSettings"
         android:key="passwords"
-        android:order="24"
+        android:order="25"
         android:title="@string/password_settings_title"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:fragment="org.chromium.chrome.browser.autofill.settings.AutofillPaymentMethodsFragment"
         android:key="autofill_payment_methods"
-        android:order="25"
+        android:order="26"
         android:title="@string/autofill_payment_methods"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:fragment="org.chromium.chrome.browser.autofill.settings.AutofillProfilesFragment"
         android:key="autofill_addresses"
-        android:order="26"
+        android:order="27"
         android:title="@string/autofill_addresses_settings_title"/>
     <PreferenceCategory
         android:key="support_section"
-        android:order="27"
+        android:order="28"
         android:title="@string/prefs_section_support"/>
     <Preference
         android:key="support_pref"
-        android:order="28"
+        android:order="29"
         android:title="@string/support_pref" />
     <PreferenceCategory
         android:key="prefs_about"
-        android:order="29"
+        android:order="30"
         android:title="@string/prefs_section_about"/>
     <Preference
         android:fragment="org.chromium.chrome.browser.about_settings.AboutChromeSettings"
         android:key="about_chrome"
-        android:order="30"
+        android:order="31"
         android:title="@string/prefs_about_chrome"/>
 
 </PreferenceScreen>

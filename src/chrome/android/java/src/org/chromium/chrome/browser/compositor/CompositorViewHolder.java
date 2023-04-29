@@ -83,6 +83,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import android.content.SharedPreferences;
+import org.chromium.base.ContextUtils;
+
 /**
  * This class holds a {@link CompositorView}. This level of indirection is needed to benefit from
  * the {@link android.view.ViewGroup#onInterceptTouchEvent(android.view.MotionEvent)} capability on
@@ -1248,6 +1251,16 @@ public class CompositorViewHolder extends FrameLayout
 
     @Override
     public int getBottomControlsHeightPixels() {
+        SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+
+        if (isCarbonButtonDisabled) {
+            return getKeyboardBottomInsetForControlsPixels()
+                    + (mBrowserControlsManager != null
+                                    ? mBrowserControlsManager.getBottomControlsHeight()
+                                    : 0);
+        }
+
         return getKeyboardBottomInsetForControlsPixels()
                 + (mBrowserControlsManager != null
                                 ? 0//mBrowserControlsManager.getBottomControlsHeight()

@@ -304,6 +304,26 @@ public class MainSettings extends PreferenceFragmentCompat
             });
         }
 
+        CheckBoxPreference legacyToolbarCheckbox = (CheckBoxPreference) findPreference("disable_carbon_button");
+        legacyToolbarCheckbox.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
+            @Override
+            public boolean onPreferenceChange(Preference preference, Object o) {
+                boolean enabled = o.toString().equals("true");
+
+                final SharedPreferences mSharedPreferences = ContextUtils.getAppSharedPreferences();
+                mSharedPreferences.edit().putBoolean("disable_carbon_button", enabled).commit();
+
+                PackageManager packageManager = getContext().getPackageManager();
+                Intent intent = packageManager.getLaunchIntentForPackage(getContext().getPackageName());
+                android.content.ComponentName componentName = intent.getComponent();
+                Intent mainIntent = Intent.makeRestartActivityTask(componentName);
+                getContext().startActivity(mainIntent);
+                Runtime.getRuntime().exit(0);
+
+                return true;
+            }
+        });
+
         CheckBoxPreference ntpNewsCheckbox = (CheckBoxPreference) findPreference("ntp_news_toggle");
         ntpNewsCheckbox.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
             @Override
