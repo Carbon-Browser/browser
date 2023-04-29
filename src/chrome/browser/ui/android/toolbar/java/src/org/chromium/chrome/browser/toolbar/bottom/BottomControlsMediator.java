@@ -14,6 +14,7 @@ import org.chromium.chrome.browser.layouts.LayoutStateProvider.LayoutStateObserv
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.ui.KeyboardVisibilityDelegate;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.chrome.browser.toolbar.bottom.MediatorCommunicator;
 import org.chromium.ui.modelutil.PropertyModel;
 
 /**
@@ -61,6 +62,8 @@ class BottomControlsMediator implements BrowserControlsStateProvider.Observer,
 
     private LayoutStateProvider mLayoutStateProvider;
 
+    private MediatorCommunicator mMediatorCommunicator;
+
     private BottomToolbarVisibilityController mBottomToolbarVisibilityController;
 
     /**
@@ -77,8 +80,10 @@ class BottomControlsMediator implements BrowserControlsStateProvider.Observer,
     BottomControlsMediator(WindowAndroid windowAndroid, PropertyModel model,
             BrowserControlsSizer controlsSizer, FullscreenManager fullscreenManager,
             int bottomControlsHeight, ObservableSupplier<Boolean> overlayPanelVisibilitySupplier, BottomToolbarVisibilityController bottomToolbarVisibilityController,
-            int bottomControlsHeightHiddenControls) {
+            int bottomControlsHeightHiddenControls, MediatorCommunicator mediatorCommunicator) {
         mModel = model;
+
+        mMediatorCommunicator = mediatorCommunicator;
 
         mFullscreenManager = fullscreenManager;
         mBrowserControlsSizer = controlsSizer;
@@ -189,6 +194,11 @@ class BottomControlsMediator implements BrowserControlsStateProvider.Observer,
      * non-zero.
      */
     private void updateAndroidViewVisibility() {
+        if (mBrowserControlsSizer.getBottomControlOffset() >= mBrowserControlsSizer.getBottomControlsHeight() * 0.8) {
+            mMediatorCommunicator.setActionButtonVisibility(false);
+        } else {
+            mMediatorCommunicator.setActionButtonVisibility(true);
+        }
         mModel.set(BottomControlsProperties.ANDROID_VIEW_VISIBLE,
                 isCompositedViewVisible() && !mIsOverlayPanelShowing && !mIsInSwipeLayout
                         && mBrowserControlsSizer.getBottomControlOffset() == 0);

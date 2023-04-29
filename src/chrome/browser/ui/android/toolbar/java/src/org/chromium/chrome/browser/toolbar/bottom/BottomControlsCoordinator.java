@@ -54,6 +54,7 @@ import android.os.Handler;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
+import org.chromium.chrome.browser.toolbar.bottom.MediatorCommunicator;
 
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
@@ -63,7 +64,7 @@ import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
  * controls offset is 0.
  */
 public class BottomControlsCoordinator implements BackPressHandler, BottomToolbarVisibilityController,
-      BottomToolbarThemeCommunicator, FullscreenManager.Observer {
+      BottomToolbarThemeCommunicator, FullscreenManager.Observer, MediatorCommunicator {
     /**
      * Interface for the BottomControls component to hide and show itself.
      */
@@ -97,6 +98,12 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     private final LayoutStateProvider.LayoutStateObserver mLayoutStateObserver;
 
     private TabModelSelector mTabModelSelector;
+
+    @Override
+    public void setActionButtonVisibility(boolean isVisible) {
+       if (mCarbonActionButton == null) return;
+       mCarbonActionButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
+    }
 
     @Override
     public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
@@ -153,7 +160,8 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         mMediator =
                 new BottomControlsMediator(windowAndroid, model, controlsSizer, fullscreenManager,
                         root.getResources().getDimensionPixelOffset(bottomControlsHeightId),
-                        overlayPanelVisibilitySupplier, this, root.getResources().getDimensionPixelOffset(R.dimen.bottom_controls_height_hidden_controls));
+                        overlayPanelVisibilitySupplier, this, root.getResources().getDimensionPixelOffset(R.dimen.bottom_controls_height_hidden_controls),
+                        this);
 
         resourceManager.getDynamicResourceLoader().registerResource(
                 root.getId(), root.getResourceAdapter());
@@ -192,8 +200,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
                   mPopup.setWindowLayoutType(WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL);
               }
 
-              mPopup.setBackgroundDrawable(new ColorDrawable(
-                Color.TRANSPARENT));
+              mPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
 
               Rect bgPadding = new Rect();
               mPopup.getBackground().getPadding(bgPadding);
