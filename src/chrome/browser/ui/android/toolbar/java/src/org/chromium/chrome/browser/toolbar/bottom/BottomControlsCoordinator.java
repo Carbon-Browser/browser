@@ -59,6 +59,7 @@ import org.chromium.chrome.browser.toolbar.bottom.MediatorCommunicator;
 import android.content.SharedPreferences;
 import org.chromium.base.ContextUtils;
 import android.widget.FrameLayout;
+import android.widget.Space;
 
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
@@ -395,7 +396,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
                     // SHOWING BROWSING
                     setBottomToolbarVisible(true);
                 }
-            }
+            }  
 
             @Override
             public void onStartedHiding(
@@ -411,6 +412,12 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             mSettingsButton.setVisibility(View.GONE);
             mCarbonButtonContainer.setVisibility(View.GONE);
             mCarbonActionButton.setVisibility(View.GONE);
+
+            Space mMiddleSpacerLeft = root.findViewById(R.id.legacy_spacer_left);
+            mMiddleSpacerLeft.setVisibility(View.VISIBLE);
+
+            Space mMiddleSpacerRight = root.findViewById(R.id.legacy_spacer_right);
+            mMiddleSpacerRight.setVisibility(View.VISIBLE);
 
             ChromeImageButton mRewardsButton = root.findViewById(R.id.rewards_button_bottom);
             mRewardsButton.setVisibility(View.VISIBLE);

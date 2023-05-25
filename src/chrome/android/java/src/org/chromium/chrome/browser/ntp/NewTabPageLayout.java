@@ -538,15 +538,15 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
 
         TextView mBinanceTextView = featuredDappTile5.findViewById(R.id.speed_dial_tile_textview);
-        TextView mKucoinTextView = featuredDappTile6.findViewById(R.id.speed_dial_tile_textview);
+        TextView mCryptoRankTextView = featuredDappTile6.findViewById(R.id.speed_dial_tile_textview);
         TextView mFlokiTextView = featuredDappTile7.findViewById(R.id.speed_dial_tile_textview);
         TextView mCurateTextView = featuredDappTile8.findViewById(R.id.speed_dial_tile_textview);
         mBinanceTextView.setText("Binance");
-        mKucoinTextView.setText("Kucoin");
+        mCryptoRankTextView.setText("CryptoRank");
         mFlokiTextView.setText("Floki");
         mCurateTextView.setText("Curate");
         mBinanceTextView.setTextColor(Color.parseColor(textColor));
-        mKucoinTextView.setTextColor(Color.parseColor(textColor));
+        mCryptoRankTextView.setTextColor(Color.parseColor(textColor));
         mFlokiTextView.setTextColor(Color.parseColor(textColor));
         mCurateTextView.setTextColor(Color.parseColor(textColor));
 
@@ -556,7 +556,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         ((FrameLayout) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
 
         ((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_binance));
-        ((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_kucoin));
+        ((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_cryptorank));
         ((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_floki));
         ((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_curate));
 
@@ -599,7 +599,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         featuredDappTile6.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                loadUrl("https://www.kucoin.com/");
+                loadUrl("https://cryptorank.io/");
             }
         });
 

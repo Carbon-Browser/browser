@@ -465,7 +465,7 @@ chrome_java_resources = [
   "java/res/drawable-xxhdpi/btn_normal_tabs.png",
   "java/res/drawable-xxhdpi/progress_bar_foreground.9.png",
   "java/res/drawable-xxhdpi/ic_phone_googblue_36dp.png",
-  "java/res/drawable-xxhdpi/ic_kucoin.png",
+  "java/res/drawable-xxhdpi/ic_cryptorank.png",
   "java/res/drawable-xxhdpi/bg_tabstrip_tab.9.png",
   "java/res/drawable-xxhdpi/btn_left.png",
   "java/res/drawable-xxhdpi/ic_photo_camera.png",

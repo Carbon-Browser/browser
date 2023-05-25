@@ -96,14 +96,22 @@
                       android:background="?attr/selectableItemBackgroundBorderless" />
 
                   <Space
+                      android:id="@+id/legacy_spacer_left"
                       android:layout_width="0dp"
                       android:layout_height="1dp"
-                      android:layout_weight="1" />
+                      android:visibility="gone"
+                      android:layout_weight="0.5" />
               </LinearLayout>
 
               <FrameLayout
+                android:id="@+id/carbon_action_button_container"
                 android:layout_width="80dp"
                 android:layout_height="@dimen/min_touch_target_size">
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
 
                 <View
                     android:id="@+id/middle_space_curve"
@@ -119,6 +127,11 @@
                     android:background="#2C2C2C"
                     android:layout_gravity="bottom|center"
                     android:layout_height="8dp"/>
+
+                <Space
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
               </FrameLayout>
 
               <LinearLayout
@@ -129,9 +142,11 @@
                   android:orientation="horizontal">
 
                   <Space
+                      android:id="@+id/legacy_spacer_right"
                       android:layout_width="0dp"
                       android:layout_height="1dp"
-                      android:layout_weight="1" />
+                      android:visibility="gone"
+                      android:layout_weight="0.5" />
 
                   <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton
                       android:id="@+id/tab_switcher_button_bottom"
@@ -154,6 +169,15 @@
                       android:background="?attr/selectableItemBackgroundBorderless"
                       android:contentDescription=""
                       style="@style/SplitToolbarButton"/>
+
+                  <org.chromium.ui.widget.ChromeImageButton
+                       android:id="@+id/rewards_button_bottom"
+                       android:scaleType="centerInside"
+                       android:src="@drawable/padded_adblock_button_background"
+                       android:background="?attr/selectableItemBackgroundBorderless"
+                       android:contentDescription=""
+                       android:visibility="gone"
+                       style="@style/SplitToolbarButton"/>
 
                   <!-- <org.chromium.ui.widget.ChromeImageButton
                        android:id="@+id/rewards_button_bottom"
