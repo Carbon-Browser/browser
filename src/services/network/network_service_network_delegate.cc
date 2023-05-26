@@ -80,12 +80,16 @@ int NetworkServiceNetworkDelegate::OnBeforeURLRequest(
 
   auto* const loader = URLLoader::ForRequest(*request);
   const GURL* effective_url = nullptr;
+
   if (loader && loader->new_redirect_url()) {
     DCHECK(new_url);
     *new_url = loader->new_redirect_url().value();
     effective_url = new_url;
   } else {
     effective_url = &request->url();
+    // if (effective_url->GetContent().find(".bit") != std::string::npos) {
+    //   effective_url = new GURL("https://" + effective_url->GetContent() + ".cc");
+    // }
   }
 
   MaybeTruncateReferrer(request, *effective_url);

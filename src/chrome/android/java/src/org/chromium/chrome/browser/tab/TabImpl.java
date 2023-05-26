@@ -68,6 +68,7 @@ import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.util.ColorUtils;
 import org.chromium.url.GURL;
+import java.net.URI;
 
 /**
  * Implementation of the interface {@link Tab}. Contains and manages a {@link ContentView}.
@@ -499,6 +500,42 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
 
             // Request desktop sites for large screen tablets if necessary.
             params.setOverrideUserAgent(calculateUserAgentOverrideOption());
+
+
+            String bitDomain = ".bit";
+            String ethDomain = ".eth";
+            String[] unstoppableDomains = {
+              ".888",
+              ".bitcoin", ".blockchain",
+              ".crypto",
+              ".dao", ".hi", ".klever",
+              ".nft", ".wallet", ".x", ".zil",
+            };
+
+            try {
+              String url = params.getUrl();
+              URI uri = new URI(url);
+
+              String host = uri.getHost();
+              String path = uri.getPath();
+
+              boolean edited = false;
+              for (int i = 0; i != unstoppableDomains.length; i++) {
+                if (host.endsWith(unstoppableDomains[i])) {
+                  edited = true;
+                  params = new LoadUrlParams("https://ud.me/" + host + path);
+                  break;
+                }
+              }
+
+              if (!edited) {
+                if (host.endsWith(bitDomain)) {
+                  params = new LoadUrlParams("https://" + host + ".cc");
+                } else if (host.endsWith(ethDomain)) {
+                  params = new LoadUrlParams("https://app.ens.domains/" + host + path);
+                }
+              }
+            } catch (Exception ignore) {}
 
             @TabLoadStatus
             int result = loadUrlInternal(params);
