@@ -58,6 +58,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.List;
 
+import org.chromium.chrome.browser.omnibox.UrlBarData;
+
 import org.chromium.chrome.browser.rewards.RewardsAPIBridge;
 
 /**
@@ -731,12 +733,19 @@ class AutocompleteMediator implements OnSuggestionsReceivedListener,
      * @param eventTime The timestamp the load was triggered by the user.
      */
     void loadTypedOmniboxText(long eventTime) {
-        final String urlText = mUrlBarEditingTextProvider.getTextWithAutocomplete();
+        String urlText = mUrlBarEditingTextProvider.getTextWithAutocomplete();
+        if (urlText.startsWith("carbon://")) {
+          urlText = UrlBarData.replaceOnce(urlText, "carbon://", "chrome://");
+        }
+        if (urlText.startsWith("chrome-extension://")) {
+          urlText = UrlBarData.replaceOnce(urlText, "chrome-extension://", "carbon-extension://");
+        }
+        final String urlTextToLoad = urlText;//mUrlBarEditingTextProvider.getTextWithAutocomplete();
         cancelAutocompleteRequests();
         if (mNativeInitialized && mAutocomplete != null) {
-            findMatchAndLoadUrl(urlText, eventTime);
+            findMatchAndLoadUrl(urlTextToLoad, eventTime);
         } else {
-            mDeferredLoadAction = () -> findMatchAndLoadUrl(urlText, eventTime);
+            mDeferredLoadAction = () -> findMatchAndLoadUrl(urlTextToLoad, eventTime);
         }
     }
 

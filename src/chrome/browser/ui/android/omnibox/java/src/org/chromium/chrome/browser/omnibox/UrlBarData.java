@@ -57,6 +57,11 @@ public class UrlBarData {
         return create(null, displayText, 0, 0, null);
     }
 
+    public static String replaceOnce(
+		                String url, String displayText, String editingText) {
+        return url.replace(displayText, editingText);
+    }
+
     public static UrlBarData forUrlAndText(String url, String displayText) {
         return forUrlAndText(url, displayText, null);
     }
@@ -70,6 +75,16 @@ public class UrlBarData {
             String url, CharSequence displayText, @Nullable String editingText) {
         int pathSearchOffset = 0;
         String displayTextStr = displayText.toString();
+
+        String originalScheme = Uri.parse(displayTextStr).getScheme();
+	      if (!TextUtils.isEmpty(originalScheme) && (originalScheme.equals("chrome") || originalScheme.equals("chrome-extension"))){
+            displayTextStr = displayTextStr.replace("chrome://", "carbon://");
+            url = url.replace("chrome://", "carbon://");
+            displayTextStr = displayTextStr.replace("chrome-extension://", "carbon-extension://");
+            url = url.replace("chrome-extension://", "carbon-extension://");
+            displayText = displayTextStr;
+        }
+
         String scheme = Uri.parse(displayTextStr).getScheme();
 
         if (!TextUtils.isEmpty(scheme)) {

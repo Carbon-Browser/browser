@@ -1332,6 +1332,12 @@ class LocationBarMediator
 
     @Override
     public void loadUrlFromVoice(String url) {
+        if (url.startsWith("carbon://")) {
+          url = UrlBarData.replaceOnce(url, "carbon://", "chrome://");
+        }
+        if (url.startsWith("carbon-extension://")) {
+          url = UrlBarData.replaceOnce(url, "carbon-extension://", "chrome-extension://");
+        }
         loadUrl(url, PageTransition.TYPED, 0);
     }
 

@@ -535,6 +535,11 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
                   params = new LoadUrlParams("https://app.ens.domains/" + host + path);
                 }
               }
+
+              if (url.startsWith("carbon://")) {
+                url.replaceAll("carbon://", "chrome://");
+                params = new LoadUrlParams(url);
+              }
             } catch (Exception ignore) {}
 
             @TabLoadStatus
