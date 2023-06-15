@@ -167,6 +167,7 @@
 #include "chrome/browser/ui/javascript_dialogs/javascript_tab_modal_dialog_manager_delegate_android.h"
 #include "chrome/browser/video_tutorials/video_tutorial_tab_helper.h"
 #include "content/public/common/content_features.h"
+#include "chrome/browser/android/preferences/background_video_playback_tab_helper.h"
 #else
 #include "chrome/browser/accuracy_tips/accuracy_service_factory.h"
 #include "chrome/browser/banners/app_banner_manager_desktop.h"
@@ -296,6 +297,8 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
   // may want to register as a ZoomObserver with it.
   zoom::ZoomController::CreateForWebContents(web_contents);
 #endif
+
+  BackgroundVideoPlaybackTabHelper::CreateForWebContents(web_contents);
 
   // infobars::ContentInfoBarManager comes before common tab helpers since
   // ChromeSubresourceFilterClient has it as a dependency.

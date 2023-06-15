@@ -1355,6 +1355,10 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
   SessionDataService::RegisterProfilePrefs(registry);
 #endif
 
+#if defined(OS_ANDROID)
+  registry->RegisterBooleanPref(prefs::kBackgroundVideoPlaybackEnabled, false);
+#endif
+
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   ExtensionWebUI::RegisterProfilePrefs(registry);
   RegisterAnimationPolicyPrefs(registry);

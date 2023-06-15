@@ -1259,6 +1259,10 @@ extern const char kSCTAuditingHashdanceReportCount[];
 extern const char kConsumerAutoUpdateToggle[];
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+extern const char kBackgroundVideoPlaybackEnabled[]; 
+#endif
+
 }  // namespace prefs
 
 #endif  // CHROME_COMMON_PREF_NAMES_H_

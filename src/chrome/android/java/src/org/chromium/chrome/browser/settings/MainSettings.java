@@ -72,6 +72,12 @@ import android.net.Uri;
 import android.content.pm.ResolveInfo;
 import androidx.preference.CheckBoxPreference;
 import android.content.SharedPreferences;
+import java.lang.Runnable;
+
+import org.chromium.components.prefs.PrefService;
+import org.chromium.components.user_prefs.UserPrefs;
+
+import org.chromium.chrome.browser.LaunchHelper;
 
 /**
  * The main settings screen, shown when the user first opens Settings.
@@ -313,12 +319,7 @@ public class MainSettings extends PreferenceFragmentCompat
                 final SharedPreferences mSharedPreferences = ContextUtils.getAppSharedPreferences();
                 mSharedPreferences.edit().putBoolean("disable_carbon_button", enabled).commit();
 
-                PackageManager packageManager = getContext().getPackageManager();
-                Intent intent = packageManager.getLaunchIntentForPackage(getContext().getPackageName());
-                android.content.ComponentName componentName = intent.getComponent();
-                Intent mainIntent = Intent.makeRestartActivityTask(componentName);
-                getContext().startActivity(mainIntent);
-                Runtime.getRuntime().exit(0);
+                LaunchHelper.doRestart();
 
                 return true;
             }
@@ -332,6 +333,23 @@ public class MainSettings extends PreferenceFragmentCompat
 
                 final SharedPreferences mSharedPreferences = ContextUtils.getAppSharedPreferences();
                 mSharedPreferences.edit().putBoolean("ntp_news_toggle", enabled).apply();
+                return true;
+            }
+        });
+
+        final PrefService prefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
+        final boolean isBackgroundVideoEnabled = prefService.getBoolean("background_video_playback");
+        CheckBoxPreference backgroundPlayCheckbox = (CheckBoxPreference) findPreference("background_video_playback");
+        backgroundPlayCheckbox.setChecked(isBackgroundVideoEnabled);
+        backgroundPlayCheckbox.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
+            @Override
+            public boolean onPreferenceChange(Preference preference, Object o) {
+                final boolean enabled = o.toString().equals("true");
+
+                prefService.setBoolean("background_video_playback", enabled);
+
+                LaunchHelper.doRestart();
+
                 return true;
             }
         });

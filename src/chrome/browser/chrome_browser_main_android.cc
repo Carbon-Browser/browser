@@ -32,6 +32,12 @@
 #include "ui/base/resource/resource_bundle_android.h"
 #include "ui/base/ui_base_paths.h"
 
+#include "base/command_line.h"
+#include "chrome/common/pref_names.h"
+#include "components/prefs/pref_service.h"
+#include "content/public/browser/render_frame_host.h"
+#include "media/base/media_switches.h"
+
 ChromeBrowserMainPartsAndroid::ChromeBrowserMainPartsAndroid(
     bool is_integration_test,
     StartupData* startup_data)
@@ -80,6 +86,15 @@ void ChromeBrowserMainPartsAndroid::PostProfileInit(Profile* profile,
   // messages can be processed (and dropped) because the handler wasn't
   // installed in time.
   webauthn::authenticator::RegisterForCloudMessages();
+
+
+  #if defined(OS_ANDROID)
+    if (profile->GetPrefs()->GetBoolean(prefs::kBackgroundVideoPlaybackEnabled)) {
+      content::RenderFrameHost::AllowInjectingJavaScript();
+      auto* command_line = base::CommandLine::ForCurrentProcess();
+      command_line->AppendSwitch(switches::kDisableBackgroundMediaSuspend);
+    }
+  #endif
 }
 
 int ChromeBrowserMainPartsAndroid::PreEarlyInitialization() {

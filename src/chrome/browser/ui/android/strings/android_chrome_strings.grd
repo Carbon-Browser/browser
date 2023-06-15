@@ -5768,6 +5768,9 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         Rewards
       </message>
 
+      <message name="IDS_ENABLE_BACKGROUND_PLAY" desc="">
+        Play video in background
+      </message>
       <message name="IDS_MAKE_BROWSER_DEFAULT" desc="">
         Make Carbon default
       </message>

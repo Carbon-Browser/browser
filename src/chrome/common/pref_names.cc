@@ -3554,4 +3554,9 @@ const char kSCTAuditingHashdanceReportCount[] =
 const char kConsumerAutoUpdateToggle[] = "settings.consumer_auto_update_toggle";
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+const char kBackgroundVideoPlaybackEnabled[] =
+    "background_video_playback";
+#endif
+
 }  // namespace prefs
