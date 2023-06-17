@@ -423,7 +423,7 @@ chrome_java_resources = [
   "java/res/drawable-xxhdpi/tabswitcher_border_frame_decoration.9.png",
   "java/res/drawable-xxhdpi/ic_mobile_friendly_grey600_24dp.png",
   "java/res/drawable-xxhdpi/btn_close_white.png",
-  "java/res/drawable-xxhdpi/ic_curate.png",
+  "java/res/drawable-xxhdpi/ic_cryptoapp.png",
   "java/res/drawable-xxhdpi/help_outline.png",
   "java/res/drawable-xxhdpi/infobar_chrome.png",
   "java/res/drawable-xxhdpi/infobar_restore.png",
