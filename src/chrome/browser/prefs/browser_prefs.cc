@@ -1356,7 +1356,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
 #endif
 
 #if defined(OS_ANDROID)
-  registry->RegisterBooleanPref(prefs::kBackgroundVideoPlaybackEnabled, false);
+  registry->RegisterBooleanPref(prefs::kBackgroundVideoPlaybackEnabled, true);
 #endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
