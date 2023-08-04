@@ -692,6 +692,11 @@ android_library("chrome_java") {
 
     #"//chrome/android/third_party/exifinterface:exifinterface_java",
 
+    # trustwallet
+    "//chrome/android/third_party/trustwallet:trustwallet_java",
+    #"//chrome/android/third_party/trustwallet:trustwallet_proto_java",
+    #"//third_party/android_deps:com_trustwallet_wallet_core_java",
+
     # amplitude
     "//chrome/android/third_party/amplitude:amplitude_java",
 

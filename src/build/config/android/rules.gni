@@ -3385,6 +3385,18 @@ if (enable_java_templates) {
                     ":$_compile_resources_target",
                     ":$_merge_manifest_target",
                   ]
+          if (_create_apk_target == "chrome_public_apk__create") {
+            loadable_modules += [
+              #"$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/arm64-v8a/libTrustWalletCore.so",
+              "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/armeabi-v7a/libTrustWalletCore.so",
+              #"$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86/libTrustWalletCore.so",
+              #"$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86_64/libTrustWalletCore.so",
+            ]
+
+            deps += [
+              "//chrome/android/third_party/trustwallet:trustwallet_java",
+            ]
+          }
 
           if (defined(_final_dex_path)) {
             dex_path = _final_dex_path

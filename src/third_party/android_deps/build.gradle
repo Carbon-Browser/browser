@@ -48,6 +48,26 @@ dependencies {
         transitive = true;
     }
 
+    //compile 'com.google.protobuf:protobuf-javalite:3.22.3'
+    compile 'com.google.protobuf:protobuf-java:3.21.2'
+    //compile "com.trustwallet:wallet-core:2.6.3"
+
+    //compile 'androidx.databinding:databinding-ktx:7.1.1'
+    //compile 'androidx.lifecycle:lifecycle-extensions:2.1.0'
+    //compile 'androidx.lifecycle:lifecycle-service:2.1.0'
+    //compile 'androidx.databinding:databinding-runtime:3.5.1'
+    //compile 'androidx.databinding:viewbinding:3.5.1'
+    //compile 'androidx.databinding:databinding-common:3.5.1'
+    //compile 'androidx.databinding:databinding-adapters:3.5.1'
+
+    //compile 'org.bitcoinj:bitcoinj-core:0.15.10'
+    //compile ('network.particle:auth-service:0.11.1') {
+    //    exclude group: 'com.github.bitcoinj', module: 'bitcoinj';
+    //}
+    //compile ('network.particle:connect:0.11.1') {
+    //    exclude group: 'com.github.bitcoinj', module: 'bitcoinj';
+    //}
+
     compile 'com.hbb20:ccp:2.5.4'
 
     // Architecture components
