@@ -71,7 +71,7 @@ class RewardsBottomSheetContent implements BottomSheetContent {
         mRewardsBridge = RewardsAPIBridge.getInstance();
 
         TextView mBalanceTextView = mContentView.findViewById(R.id.bottom_sheet_rewards_balance);
-        mBalanceTextView.setText(mRewardsBridge.getTotalCreditBalance() + " $CSIX");
+        mBalanceTextView.setText(mRewardsBridge.getTotalCreditBalance() + " points");
         Shader textShader = new LinearGradient(0, 0, 250, 0,
             new int[]{Color.parseColor("#FF320A"),Color.parseColor("#FF9133")},
            null, Shader.TileMode.CLAMP);
@@ -81,8 +81,8 @@ class RewardsBottomSheetContent implements BottomSheetContent {
         LinearLayout mLoadingIndicatorContainer = mContentView.findViewById(R.id.reward_loading_container);
         ImageView mLoadingIndicator = mContentView.findViewById(R.id.reward_loading);
         Glide.with(mContentView.getContext())
-            // .load("https://hydrisapps.com/carbon/android-resources/images/rewards_loading.gif")
-            .load("http://qnni7t2n4hc7770iq8npfli8u4.ingress.europlots.com/wp-content/uploads/2022/12/loading.gif")
+            .load("https://hydrisapps.com/carbon/android-resources/images/rewards_loading.gif")
+            // .load("http://qnni7t2n4hc7770iq8npfli8u4.ingress.europlots.com/wp-content/uploads/2022/12/loading.gif")
             .thumbnail(0.05f)
             .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
             .into(new DrawableImageViewTarget(mLoadingIndicator));

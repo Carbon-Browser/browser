@@ -112,11 +112,15 @@ import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.app.role.RoleManager;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.chromium.chrome.browser.suggestions.speeddial.helper.RemoteHelper;
+
 /**
  * Layout for the new tab page. This positions the page elements in the correct vertical positions.
  * There are no separate phone and tablet UIs; this layout adapts based on the available space.
  */
-public class NewTabPageLayout extends LinearLayout implements VrModeObserver, BackgroundController.NTPBackgroundInterface {
+public class NewTabPageLayout extends LinearLayout implements VrModeObserver, BackgroundController.NTPBackgroundInterface, RemoteHelper.SpeedDialInterface {
     private static final String TAG = "NewTabPageLayout";
 
     // Used to signify the cached resource value is unset.
@@ -183,6 +187,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     private boolean mIsIncognito;
     private WindowAndroid mWindowAndroid;
 
+    private RemoteHelper remoteDappsHelper = new RemoteHelper();
     private BackgroundController bgController = new BackgroundController();
     private SpeedDialGridView mSpeedDialView;
     private ImageView bgImageView;
@@ -267,6 +272,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mMainLayout = findViewById(R.id.ntp_main_layout);
         mMainLayoutTopSection = findViewById(R.id.mainLayoutTopSection);
         bgImageView = findViewById(R.id.bg_image_view);
+        if (remoteDappsHelper == null) remoteDappsHelper = new RemoteHelper();
+        remoteDappsHelper.getDapps((ChromeActivity)getContext(), this);
         if (bgController == null) bgController = new BackgroundController();
         bgController.getBackground((ChromeActivity)getContext(), this);
         final TextView adsBlockedTextView = (TextView)findViewById(R.id.ntp_ads_blocked);
@@ -501,130 +508,6 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         stakingTileImage.setBackground(getResources().getDrawable(R.drawable.ic_staking));
         comingSoonTile3Image.setBackground(getResources().getDrawable(R.drawable.ic_swap));
         comingSoonTile4Image.setBackground(getResources().getDrawable(R.drawable.ic_bridge));
-
-        // DApps Links
-        View featuredDappTile1 = findViewById(R.id.featured_daps1);
-        View featuredDappTile2 = findViewById(R.id.featured_daps2);
-        View featuredDappTile3 = findViewById(R.id.featured_daps3);
-        View featuredDappTile4 = findViewById(R.id.featured_daps4);
-        View featuredDappTile5 = findViewById(R.id.featured_daps5);
-        View featuredDappTile6 = findViewById(R.id.featured_daps6);
-        View featuredDappTile7 = findViewById(R.id.featured_daps7);
-        View featuredDappTile8 = findViewById(R.id.featured_daps8);
-
-
-        TextView mChaingeTextView = featuredDappTile1.findViewById(R.id.speed_dial_tile_textview);
-        TextView mPancakeSwapTextView = featuredDappTile2.findViewById(R.id.speed_dial_tile_textview);
-        TextView mBiswapTextView = featuredDappTile3.findViewById(R.id.speed_dial_tile_textview);
-        TextView mBeefyTextView = featuredDappTile4.findViewById(R.id.speed_dial_tile_textview);
-        mChaingeTextView.setText("Chainge");
-        mPancakeSwapTextView.setText("PancakeSwap");
-        mBiswapTextView.setText("Biswap");
-        mBeefyTextView.setText("Beefy");
-        mChaingeTextView.setTextColor(Color.parseColor(textColor));
-        mPancakeSwapTextView.setTextColor(Color.parseColor(textColor));
-        mBiswapTextView.setTextColor(Color.parseColor(textColor));
-        mBeefyTextView.setTextColor(Color.parseColor(textColor));
-
-        ((FrameLayout) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-        ((FrameLayout) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-        ((FrameLayout) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-        ((FrameLayout) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-
-        ((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_chainge));
-        ((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_pancake));
-        ((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_biswap));
-        ((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_beefy));
-
-
-        TextView mBinanceTextView = featuredDappTile5.findViewById(R.id.speed_dial_tile_textview);
-        TextView mCryptoRankTextView = featuredDappTile6.findViewById(R.id.speed_dial_tile_textview);
-        TextView mFlokiTextView = featuredDappTile7.findViewById(R.id.speed_dial_tile_textview);
-        TextView mCryptoAppTextView = featuredDappTile8.findViewById(R.id.speed_dial_tile_textview);
-        mBinanceTextView.setText("Binance");
-        mCryptoRankTextView.setText("CryptoRank");
-        mFlokiTextView.setText("Floki");
-        mCryptoAppTextView.setText("The Crypto App");
-        mBinanceTextView.setTextColor(Color.parseColor(textColor));
-        mCryptoRankTextView.setTextColor(Color.parseColor(textColor));
-        mFlokiTextView.setTextColor(Color.parseColor(textColor));
-        mCryptoAppTextView.setTextColor(Color.parseColor(textColor));
-
-        ((FrameLayout) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-        ((FrameLayout) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-        ((FrameLayout) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-        ((FrameLayout) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
-
-        ((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_binance));
-        ((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_cryptorank));
-        ((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_floki));
-        ((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)).setBackground(getResources().getDrawable(R.drawable.ic_cryptoapp));
-
-
-        featuredDappTile1.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://openapi.chainge.finance/app/");
-            }
-        });
-
-        featuredDappTile2.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://pancakeswap.finance/info/pairs/0x43c2abe5e3bcec619072d8668ac83ad825da707f?chain=bsc");
-            }
-        });
-
-        featuredDappTile3.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://biswap.org/?utm_source=BD_carb&utm_medium=BD_btnhp&utm_campaign=BD_carbtheo");
-            }
-        });
-
-        featuredDappTile4.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://app.beefy.com/vault/cakev2-csix-cake");
-            }
-        });
-
-        featuredDappTile5.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://binance.com/");
-            }
-        });
-
-        featuredDappTile6.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://cryptorank.io/");
-            }
-        });
-
-        featuredDappTile7.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://floki.com/");
-            }
-        });
-
-        featuredDappTile8.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://get.thecrypto.app/");
-            }
-        });
-
-
-        View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
-        mViewMoreDappsBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                loadUrl("https://carbon.website/app-store/");
-            }
-        });
     }
 
     private void loadUrl(String url) {
@@ -1255,6 +1138,160 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     }
 
     @Override
+    public void onDappReceived(String json) {
+        String textColor = isDarkMode ? "#ffffff" : "#000000";
+
+        try {
+           JSONArray mDappsArray = new JSONArray(json);
+           // DApps Links
+           View featuredDappTile1 = findViewById(R.id.featured_daps1);
+           View featuredDappTile2 = findViewById(R.id.featured_daps2);
+           View featuredDappTile3 = findViewById(R.id.featured_daps3);
+           View featuredDappTile4 = findViewById(R.id.featured_daps4);
+           View featuredDappTile5 = findViewById(R.id.featured_daps5);
+           View featuredDappTile6 = findViewById(R.id.featured_daps6);
+           View featuredDappTile7 = findViewById(R.id.featured_daps7);
+           View featuredDappTile8 = findViewById(R.id.featured_daps8);
+
+
+           TextView mTextView1 = featuredDappTile1.findViewById(R.id.speed_dial_tile_textview);
+           TextView mTextView2 = featuredDappTile2.findViewById(R.id.speed_dial_tile_textview);
+           TextView mTextView3 = featuredDappTile3.findViewById(R.id.speed_dial_tile_textview);
+           TextView mTextView4 = featuredDappTile4.findViewById(R.id.speed_dial_tile_textview);
+           mTextView1.setText(mDappsArray.getJSONObject(0).getString("title"));
+           mTextView2.setText(mDappsArray.getJSONObject(1).getString("title"));
+           mTextView3.setText(mDappsArray.getJSONObject(2).getString("title"));
+           mTextView4.setText(mDappsArray.getJSONObject(3).getString("title"));
+           mTextView1.setTextColor(Color.parseColor(textColor));
+           mTextView2.setTextColor(Color.parseColor(textColor));
+           mTextView3.setTextColor(Color.parseColor(textColor));
+           mTextView4.setTextColor(Color.parseColor(textColor));
+
+           ((FrameLayout) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+           ((FrameLayout) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+           ((FrameLayout) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+           ((FrameLayout) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+
+           ((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+           ((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+           ((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+           ((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+           ((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+           ((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+           ((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+           ((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)).setImageTintList(null);
+
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile1.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(0).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile2.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(1).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile3.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(2).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile4.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(3).getString("imgUrl"));
+
+           TextView mTextView5 = featuredDappTile5.findViewById(R.id.speed_dial_tile_textview);
+           TextView mTextView6 = featuredDappTile6.findViewById(R.id.speed_dial_tile_textview);
+           TextView mTextView7 = featuredDappTile7.findViewById(R.id.speed_dial_tile_textview);
+           TextView mTextView8 = featuredDappTile8.findViewById(R.id.speed_dial_tile_textview);
+           mTextView5.setText(mDappsArray.getJSONObject(4).getString("title"));
+           mTextView6.setText(mDappsArray.getJSONObject(5).getString("title"));
+           mTextView7.setText(mDappsArray.getJSONObject(6).getString("title"));
+           mTextView8.setText(mDappsArray.getJSONObject(7).getString("title"));
+           mTextView5.setTextColor(Color.parseColor(textColor));
+           mTextView6.setTextColor(Color.parseColor(textColor));
+           mTextView7.setTextColor(Color.parseColor(textColor));
+           mTextView8.setTextColor(Color.parseColor(textColor));
+
+           ((FrameLayout) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+           ((FrameLayout) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+           ((FrameLayout) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+           ((FrameLayout) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon_background)).setBackground(null);
+
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile5.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(4).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile6.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(5).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile7.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(6).getString("imgUrl"));
+           remoteDappsHelper.setBackground(((ImageView) featuredDappTile8.findViewById(R.id.speed_dial_tile_view_icon)), mDappsArray.getJSONObject(7).getString("imgUrl"));
+
+           featuredDappTile1.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                  try {
+                      loadUrl(mDappsArray.getJSONObject(0).getString("url"));
+                  } catch (Exception e) {}
+               }
+           });
+
+           featuredDappTile2.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                 try {
+                     loadUrl(mDappsArray.getJSONObject(1).getString("url"));
+                 } catch (Exception e) {}
+               }
+           });
+
+           featuredDappTile3.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                 try {
+                     loadUrl(mDappsArray.getJSONObject(2).getString("url"));
+                 } catch (Exception e) {}
+               }
+           });
+
+           featuredDappTile4.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                 try {
+                     loadUrl(mDappsArray.getJSONObject(3).getString("url"));
+                 } catch (Exception e) {}
+               }
+           });
+
+           featuredDappTile5.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                 try {
+                     loadUrl(mDappsArray.getJSONObject(4).getString("url"));
+                 } catch (Exception e) {}
+               }
+           });
+
+           featuredDappTile6.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                 try {
+                     loadUrl(mDappsArray.getJSONObject(5).getString("url"));
+                 } catch (Exception e) {}
+               }
+           });
+
+           featuredDappTile7.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                 try {
+                     loadUrl(mDappsArray.getJSONObject(6).getString("url"));
+                 } catch (Exception e) {}
+               }
+           });
+
+           featuredDappTile8.setOnClickListener(new View.OnClickListener() {
+               @Override
+               public void onClick(View view) {
+                 try {
+                     loadUrl(mDappsArray.getJSONObject(7).getString("url"));
+                 } catch (Exception e) {}
+               }
+           });
+        } catch (Exception e) { }
+
+        View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
+        mViewMoreDappsBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loadUrl("https://carbon.website/app-store/");
+            }
+        });
+    }
+
+    @Override
     public void onBackgroundReceived(String credit, String creditUrl, String imgUrl) {
         if (bgController == null) bgController = new BackgroundController();
         try {
@@ -1324,6 +1361,10 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
         if (bgController != null) {
             bgController = null;
+        }
+
+        if (remoteDappsHelper != null) {
+          remoteDappsHelper = null;
         }
 
         if (bgImageView != null) {

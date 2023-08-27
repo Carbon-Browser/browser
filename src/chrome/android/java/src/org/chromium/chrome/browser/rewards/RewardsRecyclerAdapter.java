@@ -149,16 +149,17 @@ public class RewardsRecyclerAdapter extends RecyclerView.Adapter<RewardsRecycler
         mRewardMonetary.setTextColor(Color.parseColor(textColor));
         TextView mRewardMonetary2 = view.findViewById(R.id.reward_monetary_value2);
 
-        String rewardPointsString = "$" + mRewardObject.valueDollar + " CSIX";
-        if (mRewardObject.valueDollar < mRewardObject.valuePoints) {
-
-            rewardPointsString = "$" + mRewardObject.valueDollar + " Voucher";
-
-            mRewardMonetary2.setText("BUY");
-        } else {
-          // csix upgrade
-          mRewardMonetary2.setText("UPGRADE");
-        }
+        String rewardPointsString = mRewardObject.valuePoints + " pts";
+          mRewardMonetary2.setText("BUY");
+        // if (mRewardObject.valueDollar < mRewardObject.valuePoints) {
+        //
+        //     rewardPointsString = "$" + mRewardObject.valueDollar + " Voucher";
+        //
+        //     mRewardMonetary2.setText("BUY");
+        // } else {
+        //   // csix upgrade
+        //   mRewardMonetary2.setText("UPGRADE");
+        // }
 
         mRewardMonetary.setText(rewardPointsString);
 

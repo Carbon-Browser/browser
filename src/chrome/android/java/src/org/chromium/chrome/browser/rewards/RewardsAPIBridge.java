@@ -111,18 +111,15 @@ public class RewardsAPIBridge {
                 HttpURLConnection conn = null;
                 StringBuffer response = new StringBuffer();
                 try {
-                    URL mUrl = new URL(API_BASE_URL + "/v1/rewards/getAllRewards");
+                    URL mUrl = new URL("https://hydrisapps.com/carbon/android-resources/rewards/info.json");
 
                     conn = (HttpURLConnection) mUrl.openConnection();
-                    conn.setConnectTimeout(8000);
+                    conn.setDoOutput(false);
+                    conn.setConnectTimeout(4000);
+                    conn.setDoInput(true);
                     conn.setUseCaches(false);
                     conn.setRequestMethod("GET");
-                    conn.setRequestProperty("Content-Type", "application/json");
-                    conn.setRequestProperty("platform", "mobile");
-                    conn.setRequestProperty("os", "android");
-                    conn.setRequestProperty("device-id", deviceID);
-                    conn.setRequestProperty("session-id", deviceID);
-                    conn.setRequestProperty("api-access", API_ACCESS_KEY);
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
 
                     // handle the response
                     int status = conn.getResponseCode();
@@ -155,28 +152,22 @@ public class RewardsAPIBridge {
                     if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
                     try {
-                        JSONObject jsonObject = new JSONObject(result);
-                        int code = jsonObject.getInt("code");
-                        if (code == 200) {
-                            ArrayList<RewardObject> mRewards = new ArrayList<>();
-                            JSONArray jsonArray = jsonObject.getJSONArray("result");
-                            for (int i = 0; i < jsonArray.length(); i++) {
-                                JSONObject row = jsonArray.getJSONObject(i);
+                        ArrayList<RewardObject> mRewards = new ArrayList<>();
+                        JSONArray jsonArray = new JSONArray(result);
+                        for (int i = 0; i < jsonArray.length(); i++) {
+                            JSONObject row = jsonArray.getJSONObject(i);
 
-                                JSONObject rewardValueObj = row.getJSONObject("reward_value");
+                            String imageUrl = row.getString("imgUrl");
+                            String name = row.getString("name");
+                            int valueDollar = row.getInt("monetary");
+                            int valuePoints = row.getInt("points");
+                            String id = row.getString("id");
 
-                                String imageUrl = row.getString("image_url");
-                                String name = row.getString("name");
-                                int valueDollar = rewardValueObj.getInt("monetary");
-                                int valuePoints = rewardValueObj.getInt("points");
-                                String id = row.getString("_id");
-
-                                RewardObject mRewardObject = new RewardObject(imageUrl, name, valueDollar, valuePoints, id);
-                                mRewards.add(mRewardObject);
-                            }
-
-                            communicator.onRewardsReceived(mRewards);
+                            RewardObject mRewardObject = new RewardObject(imageUrl, name, valueDollar, valuePoints, id);
+                            mRewards.add(mRewardObject);
                         }
+
+                        communicator.onRewardsReceived(mRewards);
                     } catch (Exception e) {
                         communicator.onReceiveRewardsError();
                     }
@@ -555,7 +546,7 @@ public class RewardsAPIBridge {
     public int getTotalCreditBalance() {
         if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
 
-        int nCredits = mPrefs.getInt("total_credit_balance", 0);
+        int nCredits = mPrefs.getInt("total_credit_balance", 10);
         return nCredits;
     }
 

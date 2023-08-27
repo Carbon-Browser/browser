@@ -1076,6 +1076,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/suggestions/speeddial/helper/ItemTouchHelperViewHolder.java",
   "java/src/org/chromium/chrome/browser/suggestions/speeddial/helper/OnStartDragListener.java",
   "java/src/org/chromium/chrome/browser/suggestions/speeddial/helper/SimpleItemTouchHelperCallback.java",
+  "java/src/org/chromium/chrome/browser/suggestions/speeddial/helper/RemoteHelper.java",
   "java/src/org/chromium/chrome/browser/suggestions/speeddial/SpeedDialDataItem.java",
   "java/src/org/chromium/chrome/browser/suggestions/speeddial/SpeedDialAdapter.java",
   "java/src/org/chromium/chrome/browser/suggestions/speeddial/SpeedDialInteraction.java",
