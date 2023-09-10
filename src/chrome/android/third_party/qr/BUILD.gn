@@ -1,0 +1,23 @@
+import("//build/config/android/rules.gni")
+import("//build/config/android/rules.gni")
+
+android_aar_prebuilt("qr_java") {
+  aar_path = "zxing-1.9.aar"
+  info_path ="qr.info"
+  deps = [
+    "//chrome/android/third_party/zxing:zxing_java",
+    #"//third_party/android_deps:com_android_support_support_v4_java"
+    ":core_java",
+  ]
+}
+
+
+
+android_aar_prebuilt("core_java") {
+  aar_path = "core-1.9.aar"
+  info_path ="core.info"
+  deps = [
+    "//chrome/android/third_party/zxing:zxing_java",
+    #"//third_party/android_deps:com_android_support_support_v4_java"
+  ]
+}

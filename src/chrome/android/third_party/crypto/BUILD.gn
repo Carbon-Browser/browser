@@ -1,0 +1,17 @@
+import("//build/config/android/rules.gni")
+import("//build/config/android/rules.gni")
+
+android_aar_prebuilt("androidx_crypto_java") {
+  aar_path = "security-crypto-1.1.0-alpha06.aar"
+  info_path ="androidx_crypto.info"
+  deps = [
+    "//third_party/androidx:androidx_annotation_annotation_java",
+    ":tink_android_java",
+  ]
+}
+
+
+java_prebuilt("tink_android_java") {
+  jar_path = "tink-android-1.8.0.jar"
+  supports_android = true
+}

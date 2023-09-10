@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:gravity="center_horizontal"
+    android:background="#1E1E1E">
+
+    <TextView
+        android:id="@+id/wallet_tab_title"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"
+        android:textColor="@android:color/white"
+        android:textAllCaps="true"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="40dp"
+        android:textStyle="bold"
+        android:text="receive"
+        tools:ignore="HardcodedText" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="40dp"
+        android:background="@drawable/rounded_background_wallet_black"
+        android:gravity="center">
+
+        <ImageView
+            android:id="@+id/qr_code_view"
+            android:layout_width="180dp"
+            android:layout_height="180dp"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#818181"
+            android:gravity="center"
+            android:layout_marginBottom="15dp"
+            android:layout_marginTop="15dp"
+            android:text="Wallet Address:"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:id="@+id/address_textview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#ffffff"
+            android:gravity="center"
+            android:text="ADDRESS"
+            tools:ignore="HardcodedText" />
+
+    </LinearLayout>
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#2f1d1c"
+        android:padding="15dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="5dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:background="@drawable/ic_warning"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:textColor="@android:color/white"
+                android:text="WARNING"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/scam_warning_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#817776"
+            tools:ignore="HardcodedText" />
+    </LinearLayout>
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/button_copy"
+            android:background="@drawable/rounded_background_wallet_send_button"
+            android:textColor="@android:color/white"
+            android:textAllCaps="true"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:text="copy"
+            android:layout_height="50dp"
+            tools:ignore="HardcodedText"/>
+
+        <Button
+            android:id="@+id/button_share"
+            android:background="@drawable/rounded_background_wallet_black"
+            android:textColor="@android:color/white"
+            android:textAllCaps="true"
+            android:layout_width="0dp"
+            android:layout_marginStart="10dp"
+            android:text="share"
+            android:layout_weight="1"
+            android:layout_height="50dp"
+            tools:ignore="HardcodedText"/>
+    </LinearLayout>
+
+</LinearLayout>

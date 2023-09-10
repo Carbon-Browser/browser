@@ -1484,6 +1484,17 @@ if (!limit_android_deps) {
   }
 
   # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
+  android_aar_prebuilt("me_dm7_barcodescanner_zxing_java") {
+    aar_path = "libs/me_dm7_barcodescanner_zxing/zxing-1.9.aar"
+    info_path =
+        "libs/me_dm7_barcodescanner_zxing/me_dm7_barcodescanner_zxing.info"
+    deps = [
+      ":com_google_zxing_core_java",
+      ":me_dm7_barcodescanner_core_java",
+    ]
+  }
+
+  # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
   java_prebuilt("org_ccil_cowan_tagsoup_tagsoup_java") {
     jar_path = "libs/org_ccil_cowan_tagsoup_tagsoup/tagsoup-1.2.1.jar"
     output_name = "org_ccil_cowan_tagsoup_tagsoup"
@@ -2276,6 +2287,20 @@ if (!limit_android_deps) {
   }
 
   # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
+  java_prebuilt("com_google_zxing_core_java") {
+    jar_path = "libs/com_google_zxing_core/core-3.2.1.jar"
+    output_name = "com_google_zxing_core"
+    supports_android = true
+
+    # To remove visibility constraint, add this dependency to
+    # //third_party/android_deps/build.gradle.
+    visibility = [
+      ":*",
+      "//third_party/androidx:*",
+    ]
+  }
+
+  # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
   java_prebuilt("com_squareup_javawriter_java") {
     jar_path = "libs/com_squareup_javawriter/javawriter-2.1.1.jar"
     output_name = "com_squareup_javawriter"
@@ -2294,6 +2319,20 @@ if (!limit_android_deps) {
   android_aar_prebuilt("io_michaelrocks_libphonenumber_android_java") {
     aar_path = "libs/io_michaelrocks_libphonenumber_android/libphonenumber-android-8.12.28.aar"
     info_path = "libs/io_michaelrocks_libphonenumber_android/io_michaelrocks_libphonenumber_android.info"
+
+    # To remove visibility constraint, add this dependency to
+    # //third_party/android_deps/build.gradle.
+    visibility = [
+      ":*",
+      "//third_party/androidx:*",
+    ]
+  }
+
+  # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
+  android_aar_prebuilt("me_dm7_barcodescanner_core_java") {
+    aar_path = "libs/me_dm7_barcodescanner_core/core-1.9.aar"
+    info_path =
+        "libs/me_dm7_barcodescanner_core/me_dm7_barcodescanner_core.info"
 
     # To remove visibility constraint, add this dependency to
     # //third_party/android_deps/build.gradle.

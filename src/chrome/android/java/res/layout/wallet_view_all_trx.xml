@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="20dp"
+    android:paddingHorizontal="50dp"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/token_icon"
+        android:layout_width="46dp"
+        android:layout_height="46dp"/>
+
+    <TextView
+        android:id="@+id/token_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="15dp"
+        android:gravity="center"
+        android:layout_gravity="center_vertical"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"/>
+
+    <Space
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"/>
+
+    <TextView
+        android:id="@+id/token_balance"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:layout_gravity="center_vertical"
+        android:textColor="@android:color/white"
+        android:textStyle="bold"/>
+</LinearLayout>

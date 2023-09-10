@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="25dp"
+    android:gravity="center_horizontal"
+    android:background="#1E1E1E"
+    android:orientation="vertical">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/balance_textview"
+                android:layout_height="wrap_content"
+                android:layout_width="wrap_content"
+                android:textAllCaps="true"
+                android:textStyle="bold"
+                android:textSize="45sp"
+                android:textColor="@android:color/white"
+                android:text="$0"/>
+
+            <TextView
+                android:id="@+id/csix_balance_textview"
+                android:layout_height="wrap_content"
+                android:layout_width="wrap_content"
+                android:textAllCaps="false"
+                android:textStyle="bold"
+                android:textColor="#808080"
+                android:textSize="12sp"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="20dp"
+                android:text="0 Carbon (CSIX)"
+                tools:ignore="HardcodedText" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/button_send"
+                    android:textColor="@android:color/white"
+                    android:textAllCaps="true"
+                    android:background="@drawable/rounded_background_wallet_send_button"
+                    android:layout_weight="1"
+                    android:layout_width="match_parent"
+                    android:text="SEND"
+                    android:layout_height="50dp"
+                    tools:ignore="HardcodedText"/>
+
+                <Button
+                    android:id="@+id/button_receive"
+                    android:layout_marginStart="10dp"
+                    android:background="@drawable/rounded_background_wallet_black"
+                    android:textColor="@android:color/white"
+                    android:layout_weight="1"
+                    android:textAllCaps="true"
+                    android:layout_width="match_parent"
+                    android:text="RECEIVE"
+                    android:layout_height="50dp"
+                    tools:ignore="HardcodedText"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/container_tokens"
+                android:layout_height="272dp"
+                android:layout_width="match_parent"
+                android:layout_marginTop="20dp"
+                android:padding="20dp"
+                android:orientation="vertical"
+                android:background="@drawable/rounded_background_wallet_black">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/white"
+                    android:text="Tokens"
+                    android:layout_marginBottom="12dp"
+                    android:textStyle="bold"
+                    tools:ignore="HardcodedText" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/expand_button_token"
+                android:layout_width="100dp"
+                android:layout_height="24dp"
+                android:textAllCaps="true"
+                android:text="See all"
+                android:gravity="center"
+                android:textStyle="bold"
+                android:textSize="11sp"
+                android:textColor="@android:color/white"
+                android:background="@drawable/rounded_background_wallet_send_button"
+                android:layout_marginTop="-12dp"
+                tools:ignore="HardcodedText" />
+
+            <LinearLayout
+                android:id="@+id/container_trx"
+                android:layout_height="272dp"
+                android:layout_width="match_parent"
+                android:layout_marginTop="40dp"
+                android:padding="20dp"
+                android:orientation="vertical"
+                android:background="@drawable/rounded_background_wallet_black">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/white"
+                    android:text="Transactions"
+                    android:layout_marginBottom="12dp"
+                    android:textStyle="bold"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/expand_button_trx"
+                android:layout_width="100dp"
+                android:layout_height="24dp"
+                android:textAllCaps="true"
+                android:textStyle="bold"
+                android:textSize="11sp"
+                android:text="See all"
+                android:gravity="center"
+                android:textColor="@android:color/white"
+                android:background="@drawable/rounded_background_wallet_send_button"
+                android:layout_marginTop="-12dp"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

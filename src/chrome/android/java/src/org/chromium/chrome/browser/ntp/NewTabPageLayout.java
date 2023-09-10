@@ -111,6 +111,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.app.role.RoleManager;
+import android.content.Intent;
+import org.chromium.base.IntentUtils;
+import org.chromium.chrome.browser.wallet.WalletActivity;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -442,15 +445,22 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mFeaturedDappsTitle.setTextColor(Color.parseColor(textColor));
 
         // Coming soon
-        View comingSoonTile1 = findViewById(R.id.coming_soon_tile1);
+        View walletTile = findViewById(R.id.coming_soon_tile1);
         View stakingTile = findViewById(R.id.coming_soon_tile2);
         View comingSoonTile3 = findViewById(R.id.coming_soon_tile3);
         View comingSoonTile4 = findViewById(R.id.coming_soon_tile4);
 
-        comingSoonTile1.setOnClickListener(new View.OnClickListener() {
+        walletTile.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // loadUrl("https://carbon.website/csix/");
+                Intent intent = new Intent();
+                intent.setClass(view.getContext(), WalletActivity.class);
+
+                try {
+                    ((ChromeActivity)getContext()).startActivityForResult(intent, 12345);
+                } catch (Exception ignore) {}
+
+                // IntentUtils.safeStartActivity(view.getContext(), intent);
             }
         });
 
@@ -475,7 +485,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             }
         });
 
-        TextView mWalletTextView = comingSoonTile1.findViewById(R.id.speed_dial_tile_textview);
+        TextView mWalletTextView = walletTile.findViewById(R.id.speed_dial_tile_textview);
         TextView mStakingTextView = stakingTile.findViewById(R.id.speed_dial_tile_textview);
         TextView mSwapTextView = comingSoonTile3.findViewById(R.id.speed_dial_tile_textview);
         TextView mBridgeTextView = comingSoonTile4.findViewById(R.id.speed_dial_tile_textview);
@@ -488,23 +498,23 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mSwapTextView.setTextColor(Color.parseColor(textColor));
         mBridgeTextView.setTextColor(Color.parseColor(textColor));
 
-        FrameLayout comingSoonTile1Background = comingSoonTile1.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout walletBackground = walletTile.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout stakingTileBackground = stakingTile.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout comingSoonTile3Background = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout comingSoonTile4Background = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon_background);
 
-        comingSoonTile1Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        walletBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         stakingTileBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         comingSoonTile3Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         comingSoonTile4Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
 
-        ImageView comingSoonTile1Image = comingSoonTile1.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView walletTileImage = walletTile.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView stakingTileImage = stakingTile.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView comingSoonTile3Image = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView comingSoonTile4Image = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon);
 
 
-        comingSoonTile1Image.setBackground(getResources().getDrawable(R.drawable.ic_wallet));
+        walletTileImage.setBackground(getResources().getDrawable(R.drawable.ic_wallet));
         stakingTileImage.setBackground(getResources().getDrawable(R.drawable.ic_staking));
         comingSoonTile3Image.setBackground(getResources().getDrawable(R.drawable.ic_swap));
         comingSoonTile4Image.setBackground(getResources().getDrawable(R.drawable.ic_bridge));

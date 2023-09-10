@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Active / Default -->
+    <item android:drawable="@drawable/oval_shape" android:state_enabled="true" android:state_pressed="false" android:state_selected="false" />
+    <!-- In Active / Disable -->
+    <item android:drawable="@drawable/oval_shape_transparent_stroke" android:state_enabled="false" android:state_pressed="false" />
+</selector>

@@ -48,6 +48,10 @@ dependencies {
         transitive = true;
     }
 
+    compile ('me.dm7.barcodescanner:zxing:1.9') {
+        exclude group: 'com.android.support', module:'support-v4'
+    }
+
     //compile 'com.google.protobuf:protobuf-javalite:3.22.3'
     compile 'com.google.protobuf:protobuf-java:3.21.2'
     //compile "com.trustwallet:wallet-core:2.6.3"

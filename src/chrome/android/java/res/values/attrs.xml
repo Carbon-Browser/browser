@@ -20,4 +20,20 @@
     <declare-styleable name="ExploreSitesTileView">
         <attr name="iconCornerRadius" format="dimension"/>
     </declare-styleable>
+
+
+    <declare-styleable name="BlurView">
+        <attr name="blurRadius" format="integer"/>
+        <attr name="downsampleFactor" format="integer"/>
+        <attr name="overlayColor" format="color"/>
+    </declare-styleable>
+
+    <declare-styleable name="BigButtonView">
+        <attr name="text" format="string"/>
+        <attr name="subText" format="string"/>
+    </declare-styleable>
+
+    <declare-styleable name="BlurLockView">
+        <attr name="password_type" format="string"/>
+    </declare-styleable>
 </resources>

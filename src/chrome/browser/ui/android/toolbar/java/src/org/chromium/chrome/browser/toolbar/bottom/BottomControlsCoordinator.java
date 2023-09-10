@@ -61,6 +61,9 @@ import org.chromium.base.ContextUtils;
 import android.widget.FrameLayout;
 import android.widget.Space;
 
+import android.content.Intent;
+import org.chromium.base.IntentUtils;
+
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
  * bottom UI that re-sizes the web contents, scrolls off-screen, and hides when the keyboard is
@@ -263,9 +266,12 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
               menu.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
             	menu.addItem(mWalletItem, "", new View.OnClickListener() {
               		@Override
-              		public void onClick(View v) {
-                    Toast.makeText(v.getContext(), "Coming soon!", Toast.LENGTH_SHORT).show();
-                    menu.menuOnclickMethod();
+              		public void onClick(View view) {
+                    Intent intent = new Intent();
+                    intent.setClassName("org.chromium.chrome.browser.wallet", "org.chromium.chrome.browser.wallet.WalletActivity");
+
+                    IntentUtils.safeStartActivity(view.getContext(), intent);
+
                     new Handler().postDelayed(new Runnable() {
                         @Override
                         public void run() {
@@ -396,7 +402,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
                     // SHOWING BROWSING
                     setBottomToolbarVisible(true);
                 }
-            }  
+            }
 
             @Override
             public void onStartedHiding(

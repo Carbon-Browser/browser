@@ -104,10 +104,17 @@ class ChromiumDepGraph {
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
             licenseName: 'Apache 2.0'),
 
+        androidx_security_security_crypto: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+
+        com_google_zxing_core: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
 
         androidx_multidex_multidex: new PropertyOverride(
             url: 'https://maven.google.com/androidx/multidex/multidex/2.0.0/multidex-2.0.0.aar'),
-  
+
         com_android_tools_desugar_jdk_libs_configuration: new PropertyOverride(
             licensePath: 'licenses/desugar_jdk_libs_configuration.txt',
             licenseName: 'BSD 3-Clause',
