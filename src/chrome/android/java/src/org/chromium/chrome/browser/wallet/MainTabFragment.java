@@ -23,20 +23,34 @@ import android.view.Gravity;
 import android.content.DialogInterface;
 import org.chromium.base.ApiCompatibilityUtils;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import android.graphics.drawable.Drawable;
+
 import android.graphics.drawable.ColorDrawable;
 import java.lang.Integer;
 import wallet.core.jni.CoinType;
 
-public class MainTabFragment extends Fragment {
+public class MainTabFragment extends Fragment implements WalletDatabaseInterface {
     public MainTabFragment() {
         super(R.layout.wallet_fragment_main);
     }
+
+    private float density;
+    private int valueInDp;
 
     private static View mMainView;
 
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         mMainView = view;
+
+        density = view.getContext().getResources().getDisplayMetrics().density;
+        valueInDp = (int)(20 * density);
 
         TextView mBalanceTextView = view.findViewById(R.id.balance_textview);
         Shader textShader = new LinearGradient(0, 0, 80, 0,
@@ -76,56 +90,107 @@ public class MainTabFragment extends Fragment {
             }
         });
 
+        calculateTotal();
         drawTrxView();
         drawTokenView();
     }
 
-    private void drawTokenView() {
+    @Override
+    public void onTransactionsReceived() {
+        drawTrxView();
+    }
+
+    @Override
+    public void onTokenInfoReceived() {
+        drawTokenView();
+        calculateTotal();
+    }
+
+    private void calculateTotal() {
+        String walletValue = ((WalletInterface) getActivity()).getWalletValue();
+        TextView mBalanceTextView = mMainView.findViewById(R.id.balance_textview);
+        mBalanceTextView.setText("$"+walletValue);
+    }
+
+    private void drawTrxView() {
         if (mMainView == null) return;
 
         ArrayList<TransactionObj> mTrxArray = ((WalletInterface) getActivity()).getTrxList();
 
         // add tokens to container
-        LinearLayout mTrxContainer = mMainView.findViewById(R.id.container_tokens);
-        for (int i = 0; i != mTrxArray.size(); i++) {
-            TransactionObj trxObj = mTrxArray.get(i);
+        LinearLayout mTrxContainer = mMainView.findViewById(R.id.container_trx);
 
-            View v = LayoutInflater.from(mMainView.getContext()).inflate(R.layout.wallet_transaction_item, null);
-            mTrxContainer.addView(v);
+        for (int i = 0; i != mTrxArray.size() && i < 3; i++) {
+            final TransactionObj trxObj = mTrxArray.get(i);
+
+            View v;
+            if (mTrxContainer.getChildAt(i + 1) == null) {
+                v = LayoutInflater.from(mMainView.getContext()).inflate(R.layout.wallet_transaction_item, null);
+                mTrxContainer.addView(v);
+            } else {
+                v = (View)mTrxContainer.getChildAt(i + 1);
+            }
 
             TextView actionTitleTextView = v.findViewById(R.id.action_title);
-            actionTitleTextView.setText(tokenObj.name);
+            actionTitleTextView.setText(trxObj.isSender ? "Sent" : "Received");
 
             TextView addressTextView = v.findViewById(R.id.address);
-            addressTextView.setText(tokenObj.chainName);
+            addressTextView.setText(trxObj.isSender ? trxObj.recipientAddress : trxObj.senderAddress);
 
             TextView trxValueTextView = v.findViewById(R.id.token_value_token);
-            trxValueTextView.setText(tokenObj.balance);
+            trxValueTextView.setText(trxObj.amount);
 
             ImageView tokenIcon = v.findViewById(R.id.token_icon);
-            tokenIcon.setImageResource(tokenObj.icon);
+            Glide.with(tokenIcon)
+                .load(trxObj.tokenIconUrl)
+                //.thumbnail(0.05f)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .fitCenter()
+                // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+                // .transform(new RoundedCorners(valueInDp))
+                .into(new CustomTarget<Drawable>() {
+                    @Override
+                    public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                        if (tokenIcon.getDrawable() == null)
+                            tokenIcon.setImageDrawable(resource);
+                    }
+
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                    }
+                });
 
             v.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    // TODO go to trx view
+                    ((WalletInterface) getActivity()).onNavigateTransactionView(trxObj);
                 }
             });
         }
     }
 
-    private void drawTokenView() {
+    private void drawTokenView() { // carbon = 0, bsc = 1, eth = 2
         if (mMainView == null) return;
 
         ArrayList<TokenObj> mTokenArray = ((WalletInterface) getActivity()).getTokenList();
 
-        // add tokens to container
         LinearLayout mTokenContainer = mMainView.findViewById(R.id.container_tokens);
+
+        boolean doTokensExist = mTokenContainer.getChildCount() > 1;
+
+        // add tokens to container
         for (int i = 0; i != mTokenArray.size(); i++) {
             TokenObj tokenObj = mTokenArray.get(i);
 
-            View v = LayoutInflater.from(mMainView.getContext()).inflate(R.layout.wallet_token_item, null);
-            mTokenContainer.addView(v);
+            View v;
+
+            if (doTokensExist) {
+                v = (View)mTokenContainer.getChildAt(i + 1);
+            } else {
+                v = LayoutInflater.from(mMainView.getContext()).inflate(R.layout.wallet_token_item, null);
+                mTokenContainer.addView(v);
+            }
 
             TextView tokenNameTextView = v.findViewById(R.id.token_name);
             tokenNameTextView.setText(tokenObj.name);
@@ -140,7 +205,25 @@ public class MainTabFragment extends Fragment {
             tokenValueUSDTextView.setText("$"+String.format("%.2f", (Float.parseFloat(tokenObj.usdValue)*Float.parseFloat(tokenObj.balance))));
 
             ImageView tokenIcon = v.findViewById(R.id.token_icon);
-            tokenIcon.setImageResource(tokenObj.icon);
+            Glide.with(tokenIcon)
+                .load(tokenObj.iconUrl)
+                //.thumbnail(0.05f)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .fitCenter()
+                // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+                // .transform(new RoundedCorners(valueInDp))
+                .into(new CustomTarget<Drawable>() {
+                    @Override
+                    public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                        if (tokenIcon.getDrawable() == null)
+                            tokenIcon.setImageDrawable(resource);
+                    }
+
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                    }
+                });
 
             v.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -173,6 +256,53 @@ public class MainTabFragment extends Fragment {
       });
 
       expandViewDialog.setContentView(containerView);
+
+      ArrayList<TransactionObj> mTrxArray = ((WalletInterface) getActivity()).getTrxList();
+
+      for (int i = 0; i != mTrxArray.size(); i++) {
+          final TransactionObj trxObj = mTrxArray.get(i);
+
+          View v = LayoutInflater.from(mMainView.getContext()).inflate(R.layout.wallet_transaction_item, null);
+          containerView.addView(v);
+
+          TextView actionTitleTextView = v.findViewById(R.id.action_title);
+          actionTitleTextView.setText(trxObj.isSender ? "Sent" : "Received");
+
+          TextView addressTextView = v.findViewById(R.id.address);
+          addressTextView.setText(trxObj.isSender ? trxObj.recipientAddress : trxObj.senderAddress);
+
+          TextView trxValueTextView = v.findViewById(R.id.token_value_token);
+          trxValueTextView.setText(trxObj.amount);
+
+          ImageView tokenIcon = v.findViewById(R.id.token_icon);
+          Glide.with(tokenIcon)
+              .load(trxObj.tokenIconUrl)
+              //.thumbnail(0.05f)
+              .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+              .fitCenter()
+              // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+              // .transform(new RoundedCorners(valueInDp))
+              .into(new CustomTarget<Drawable>() {
+                  @Override
+                  public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                      if (tokenIcon.getDrawable() == null)
+                          tokenIcon.setImageDrawable(resource);
+                  }
+
+                  @Override
+                  public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                  }
+              });
+
+          v.setOnClickListener(new View.OnClickListener() {
+              @Override
+              public void onClick(View view) {
+                  ((WalletInterface) getActivity()).onNavigateTransactionView(trxObj);
+                  expandViewDialog.dismiss();
+              }
+          });
+      }
 
       expandViewDialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
     }
@@ -221,7 +351,25 @@ public class MainTabFragment extends Fragment {
             tokenValueUSDTextView.setText("$"+String.format("%.2f", (Float.parseFloat(tokenObj.usdValue)*Float.parseFloat(tokenObj.balance))));
 
             ImageView tokenIcon = v.findViewById(R.id.token_icon);
-            tokenIcon.setImageResource(tokenObj.icon);
+            Glide.with(tokenIcon)
+                .load(tokenObj.iconUrl)
+                //.thumbnail(0.05f)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .fitCenter()
+                // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+                // .transform(new RoundedCorners(valueInDp))
+                .into(new CustomTarget<Drawable>() {
+                    @Override
+                    public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                        if (tokenIcon.getDrawable() == null)
+                            tokenIcon.setImageDrawable(resource);
+                    }
+
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                    }
+                });
 
             v.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -258,8 +406,26 @@ public class MainTabFragment extends Fragment {
         // center
         View optionsLayout = LayoutInflater.from(context).inflate(R.layout.wallet_popup_menu, null);
         container.addView(optionsLayout);
-        View tokenIconPopup = optionsLayout.findViewById(R.id.token_icon);
-        tokenIconPopup.setBackground(context.getResources().getDrawable(tokenObj.icon));
+        ImageView tokenIconPopup = optionsLayout.findViewById(R.id.token_icon);
+        Glide.with(tokenIconPopup)
+            .load(tokenObj.iconUrl)
+            //.thumbnail(0.05f)
+            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .fitCenter()
+            // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+            // .transform(new RoundedCorners(valueInDp))
+            .into(new CustomTarget<Drawable>() {
+                @Override
+                public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                    if (tokenIconPopup.getDrawable() == null)
+                        tokenIconPopup.setImageDrawable(resource);
+                }
+
+                @Override
+                public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                }
+            });
 
         View mSendButton = container.findViewById(R.id.token_option_send);
         mSendButton.setOnClickListener(new View.OnClickListener() {
@@ -309,7 +475,25 @@ public class MainTabFragment extends Fragment {
             final TokenObj tokenObj = mTokenArray.get(i);
 
             ImageView tokenIcon = tokenRow.findViewById(R.id.token_icon);
-            tokenIcon.setImageResource(tokenObj.icon);
+            Glide.with(tokenIcon)
+                .load(tokenObj.iconUrl)
+                //.thumbnail(0.05f)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .fitCenter()
+                // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+                // .transform(new RoundedCorners(valueInDp))
+                .into(new CustomTarget<Drawable>() {
+                    @Override
+                    public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                        if (tokenIcon.getDrawable() == null)
+                            tokenIcon.setImageDrawable(resource);
+                    }
+
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                    }
+                });
 
             TextView tokenName = tokenRow.findViewById(R.id.token_name);
             tokenName.setText(tokenObj.name);

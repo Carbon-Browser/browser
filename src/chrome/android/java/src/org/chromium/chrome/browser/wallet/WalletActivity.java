@@ -60,121 +60,102 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     private String mPinCode = "";
 
-    private TokenDatabase mDatabase;
+    private static WalletDatabaseInterface mWalletDatabaseInterface;
 
     private String mMnemonicString;
 
     private TrxObj mPendingTrx;
 
-    private ArrayList<TokenObj> mTokenArray = new ArrayList<TokenObj>() {{
-        add(new TokenObj(true, R.drawable.crypto_logo_carbon, "", "Carbon", "0.00", "0", "CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206", "BEP20"));
-        add(new TokenObj(CoinType.BITCOIN, R.drawable.crypto_logo_bitcoin, "Bitcoin", "0.00", "0", "BTC", ""));
-        add(new TokenObj(CoinType.SMARTCHAIN, R.drawable.crypto_logo_binance, "Binance Smart Chain", "0.00", "0", "BSC", "BEP20"));
-        add(new TokenObj(CoinType.ETHEREUM, R.drawable.crypto_logo_ethereum, "Ethereum", "0.00", "0", "ETH", ""));
-    }};
-
-    private ArrayList<TransactionObj> mTransactionArray = new ArrayList<TransactionObj>();
-
     public WalletActivity() {
-        if (mDatabase == null) mDatabase = new TokenDatabase(this);
-
         fetchLatestPrices();
     }
 
     @Override
     public ArrayList<TransactionObj> getTrxList() {
-        return mTransactionArray;
+        return TokenDatabase.getInstance(this).getAllTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), mWallet.getAddressForCoin(CoinType.ETHEREUM));
     }
 
     @Override
     public ArrayList<TokenObj> getTokenList() {
-        return mTokenArray;
+        return TokenDatabase.getInstance(this).getTokenList();
     }
 
     @Override
     public void onReceivedTransactions(ArrayList<TransactionObj> list) {
-        //
-        mTransactionArray.addAll(list);
+        // send to database
+        TokenDatabase.getInstance(this).addAndReplaceTrx(list);
+
+        if (mWalletDatabaseInterface != null) mWalletDatabaseInterface.onTransactionsReceived();
     }
 
     private void getTokenTrx() {
         CryptoAPIHelper mCryptoAPIHelper = new CryptoAPIHelper(this);
 
+        ArrayList<TokenObj> mTokenArray = getTokenList();
         try {
             for (int i = 0; i != mTokenArray.size(); i++) {
                 TokenObj token = mTokenArray.get(i);
-                CoinType coinType = token.coinType;
+
                 if (token.isCustomType) {
                     if (token.chainName.equals("BEP20")) {
                         mCryptoAPIHelper.getBEPTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.chain, token.ticker);
                     } else {
                         mCryptoAPIHelper.getERCTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), token.chain, token.ticker);
                     }
-                } else if (coinType == CoinType.ETHEREUM) {
-                    mCryptoAPIHelper.getBSCETHPrice(mWallet.getAddressForCoin(coinType), true, token.ticker);
-                } else if (coinType == CoinType.SMARTCHAIN) {
-                    mCryptoAPIHelper.getBSCETHPrice(mWallet.getAddressForCoin(coinType), false, token.ticker);
+                } else if (token.ticker.equals("ETH")) {
+                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), true, token.ticker);
+                } else if (token.ticker.equals("BSC")) {
+                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), false, token.ticker);
                 } else {
                     // btc
-
                 }
             }
-        } catch (Exception e) {
-          e.printStackTrace();
+        } catch (Exception ignore) {
+
         }
     }
 
     private void fetchLatestPrices() {
-        // TODO fetch balance for all crpytos
+        // fetch balance for all crpytos
         CryptoAPIHelper mCryptoAPIHelper = new CryptoAPIHelper(this);
         mCryptoAPIHelper.getEthPrice();
-        mCryptoAPIHelper.getBTCPrice();
+        // mCryptoAPIHelper.getBTCPrice();
         mCryptoAPIHelper.getBNBPrice();
+        mCryptoAPIHelper.getBEPPrice("CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206");
     }
 
     private void fetchBalance() {
         CryptoAPIHelper mCryptoAPIHelper = new CryptoAPIHelper(this);
         mCryptoAPIHelper.getEthBalance(mWallet.getAddressForCoin(CoinType.ETHEREUM));
         mCryptoAPIHelper.getBNBBalance(mWallet.getAddressForCoin(CoinType.SMARTCHAIN)); // BSC uses eth smart contracts
-        mCryptoAPIHelper.getBTCBalance(mWallet.getAddressForCoin(CoinType.BITCOIN));
+        // mCryptoAPIHelper.getBTCBalance(mWallet.getAddressForCoin(CoinType.BITCOIN));
         mCryptoAPIHelper.getBEPBalance("0x04756126f044634c9a0f0e985e60c88a51acc206", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), "CSIX");
-        mCryptoAPIHelper.getBEPPrice("CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206");
     }
 
     @Override
     public void onReceiveTokenPrice(String tokenSymbol, double price) {
-        for (int i = 0; i != mTokenArray.size(); i++) {
-            TokenObj tokenObj = mTokenArray.get(i);
-            if (tokenSymbol.equals(tokenObj.ticker)) {
-                tokenObj.usdValue = price+"";
-                mTokenArray.set(i, tokenObj);
-                break;
-            }
-        }
+        TokenDatabase.getInstance(this).updateTokenPrice(tokenSymbol, price);
+
+        if (mWalletDatabaseInterface != null) mWalletDatabaseInterface.onTokenInfoReceived();
     }
 
     @Override
-    public void onReceivedCustomTokenPrice(String contractAddress, double priceUsd) {
-        for (int i = 0; i != mTokenArray.size(); i++) {
-            TokenObj tokenObj = mTokenArray.get(i);
-            if (contractAddress.equals(tokenObj.chain)) {
-                tokenObj.usdValue = priceUsd+"";
-                mTokenArray.set(i, tokenObj);
-                break;
-            }
-        }
+    public void onReceivedCustomTokenPrice(String tokenSymbol, double priceUsd) {
+        TokenDatabase.getInstance(this).updateTokenPrice(tokenSymbol, priceUsd);
+
+        if (mWalletDatabaseInterface != null) mWalletDatabaseInterface.onTokenInfoReceived();
     }
 
     @Override
     public void onUpdatedBalance(String tokenSymbol, String balance) {
-        for (int i = 0; i != mTokenArray.size(); i++) {
-            TokenObj tokenObj = mTokenArray.get(i);
-            if (tokenSymbol.equals(tokenObj.ticker)) {
-                tokenObj.balance = balance;
-                mTokenArray.set(i, tokenObj);
-                break;
-            }
-        }
+        TokenDatabase.getInstance(this).updateTokenBalance(tokenSymbol, balance);
+
+        if (mWalletDatabaseInterface != null) mWalletDatabaseInterface.onTokenInfoReceived();
+    }
+
+    @Override
+    public String getWalletValue() {
+        return TokenDatabase.getInstance(this).getWalletValue();
     }
 
     @Override
@@ -335,6 +316,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
         }
 
         MainTabFragment mMainTabFragment = new MainTabFragment();
+        mWalletDatabaseInterface = mMainTabFragment;
 
         getSupportFragmentManager().beginTransaction()
                 .addToBackStack(null)
@@ -346,7 +328,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
     public void onNavigateReceive(TokenObj tokenObj) {
         Bundle walletReceiveBundle = new Bundle();
 
-        CoinType type = tokenObj.isCustomType ? (tokenObj.chainName.equals("BEP20") ? CoinType.SMARTCHAIN : CoinType.ETHEREUM) : tokenObj.coinType;
+        CoinType type = tokenObj.chainName.equals("BEP20") ? CoinType.SMARTCHAIN : CoinType.ETHEREUM;
         walletReceiveBundle.putString("COIN_NAME_KEY", tokenObj.ticker);
         walletReceiveBundle.putString("COIN_ADDRESS_KEY", getAddressForCoin(type));
 
@@ -367,12 +349,11 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
     public void onNavigateSend(TokenObj tokenObj) {
         Bundle walletSendBundle = new Bundle();
         walletSendBundle.putString("COIN_NAME_KEY", tokenObj.name);
-        walletSendBundle.putInt("COIN_ICON_KEY", tokenObj.icon);
         walletSendBundle.putString("COIN_ICON_URL_KEY", tokenObj.iconUrl);
         walletSendBundle.putString("COIN_BALANCE_KEY", tokenObj.balance);
         walletSendBundle.putString("COIN_USD_VALUE", tokenObj.usdValue);
         walletSendBundle.putString("COIN_TICKER_KEY", tokenObj.ticker);
-        int coinType = tokenObj.isCustomType ? (tokenObj.chainName.equals("BEP20") ? CoinType.SMARTCHAIN.value() : CoinType.ETHEREUM.value()) : tokenObj.coinType.value();
+        int coinType = tokenObj.chainName.equals("BEP20") ? CoinType.SMARTCHAIN.value() : CoinType.ETHEREUM.value();
         walletSendBundle.putInt("COIN_TYPE_KEY", coinType);
         walletSendBundle.putString("COIN_CONTRACT_ADDRESS_KEY", tokenObj.chain);
         walletSendBundle.putString("COIN_CHAIN_TYPE_KEY", tokenObj.chainName);
@@ -434,11 +415,9 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
     public void onTrxVerified() {
         Bundle verifyTrxBundle = new Bundle();
 
-        verifyTrxBundle.putInt("COIN_ICON_KEY", mPendingTrx.drawableIcon);
         verifyTrxBundle.putString("COIN_ICON_URL_KEY", mPendingTrx.iconUrl);
         verifyTrxBundle.putString("COIN_USD_VALUE", mPendingTrx.tokenPriceUsd);
         verifyTrxBundle.putString("COIN_TICKER_KEY", mPendingTrx.tokenTicker);
-        verifyTrxBundle.putInt("COIN_TYPE_KEY", mPendingTrx.coinType);
         verifyTrxBundle.putBoolean("TRX_SENT_KEY", false);
         verifyTrxBundle.putString("TRX_RECIPIENT", mPendingTrx.recipient);
         verifyTrxBundle.putString("TRX_AMOUNT", mPendingTrx.tokenAmount);
@@ -458,6 +437,47 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
         }
 
         getSupportFragmentManager().beginTransaction()
+                .replace(R.id.wallet_fragment_container_view, mWalletTrxFragment, null)
+                .commit();
+    }
+
+    @Override
+    public void onNavigateTransactionView(TransactionObj trxObj) {
+        Bundle trxBundle = new Bundle();
+
+        String address = trxObj.isSender ? trxObj.recipientAddress : trxObj.senderAddress;
+
+        String externalUrl = "";
+        if (trxObj.chainType.equals("BEP20")) {
+            externalUrl = "https://bscscan.io/tx/" + trxObj.hash;
+        } else {
+            externalUrl = "https://etherscan.io/tx/" + trxObj.hash;
+        }
+
+        trxBundle.putString("COIN_ICON_URL_KEY", trxObj.tokenIconUrl);
+        trxBundle.putString("COIN_USD_VALUE", trxObj.tokenPriceUsd);
+        trxBundle.putString("COIN_TICKER_KEY", trxObj.tokenSymbol);
+        // trxBundle.putInt("COIN_TYPE_KEY", trxObj.coinType);
+        trxBundle.putBoolean("TRX_SENT_KEY", true);
+        trxBundle.putString("TRX_RECIPIENT", address);
+        trxBundle.putString("TRX_AMOUNT", trxObj.amount);
+        trxBundle.putInt("TRX_STATUS", 3);
+        trxBundle.putString("TRX_EXTERNAL_URL", externalUrl);
+        trxBundle.putString("TRX_DATE", trxObj.timestamp);
+        trxBundle.putString("TRX_GAS", trxObj.gas);
+        trxBundle.putString("COIN_CONTRACT_ADDRESS_KEY", trxObj.chainType);
+        trxBundle.putString("COIN_CHAIN_TYPE_KEY", trxObj.chainType);
+        trxBundle.putString("COIN_NAME_KEY", trxObj.coinName);
+
+        WalletTransaction mWalletTrxFragment = new WalletTransaction();
+        mWalletTrxFragment.setArguments(trxBundle);
+
+        if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
+            getSupportFragmentManager().popBackStack();
+        }
+
+        getSupportFragmentManager().beginTransaction()
+                .addToBackStack(null)
                 .replace(R.id.wallet_fragment_container_view, mWalletTrxFragment, null)
                 .commit();
     }
@@ -499,6 +519,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
         getTokenTrx();
 
         MainTabFragment mMainTabFragment = new MainTabFragment();
+        mWalletDatabaseInterface = mMainTabFragment;
 
         getSupportFragmentManager().beginTransaction()
                 .add(R.id.wallet_fragment_container_view, mMainTabFragment, null)
@@ -513,6 +534,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
             mSharedPreferences.edit().putString("MNEMONIC_KEY", mWallet.mnemonic()).commit();
 
             MainTabFragment mMainTabFragment = new MainTabFragment();
+            mWalletDatabaseInterface = mMainTabFragment;
 
             getSupportFragmentManager().beginTransaction()
                     .add(R.id.wallet_fragment_container_view, mMainTabFragment, null)
@@ -536,6 +558,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
         mSharedPreferences.edit().putString("MNEMONIC_KEY", mWallet.mnemonic()).commit();
 
         MainTabFragment mMainTabFragment = new MainTabFragment();
+        mWalletDatabaseInterface = mMainTabFragment;
 
         getSupportFragmentManager().beginTransaction()
                 .add(R.id.wallet_fragment_container_view, MainTabFragment.class, null)

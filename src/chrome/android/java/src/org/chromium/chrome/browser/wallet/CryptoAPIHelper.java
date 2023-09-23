@@ -48,7 +48,7 @@ public class CryptoAPIHelper {
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(true);
-                    conn.setConnectTimeout(10000);
+                    conn.setConnectTimeout(20000);
                     conn.setDoInput(true);
                     conn.setUseCaches(false);
                     conn.setRequestMethod(callType);
@@ -105,7 +105,7 @@ public class CryptoAPIHelper {
                             JSONArray resultArr = new JSONArray(result);
                             for (int i = 0; i != resultArr.length(); i++) {
                                 JSONObject item = resultArr.getJSONObject(i);
-                                mWalletInterface.onReceivedCustomTokenPrice(item.getString("address"), item.getDouble("priceUsd"));
+                                mWalletInterface.onReceivedCustomTokenPrice(tokenSymbol, item.getDouble("priceUsd")); //item.getString("address")
                             }
                             break;
                         default:
@@ -127,7 +127,7 @@ public class CryptoAPIHelper {
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);
-                    conn.setConnectTimeout(10000);
+                    conn.setConnectTimeout(20000);
                     conn.setDoInput(true);
                     conn.setUseCaches(false);
                     conn.setRequestMethod(callType);
@@ -181,7 +181,13 @@ public class CryptoAPIHelper {
                                 MathContext mc = new MathContext(6);
                                 trxAmount = trxAmount.divide(wei, mc);
 
-                                TransactionObj trxObj = new TransactionObj(trxItem.getString("timeStamp"), trxAmount.toString(), trxItem.getString("hash"), trxItem.getString("to"), trxItem.getString("from"), trxItem.getString("contractAddress"));
+                                BigDecimal gasPrice = new BigDecimal(trxItem.getString("gasPrice"));
+                                BigDecimal gasUsed = new BigDecimal(trxItem.getString("gasUsed"));
+                                BigDecimal gas = gasUsed.multiply(gasPrice);
+                                gas = gas.divide(wei, mc);
+
+                                TransactionObj trxObj = new TransactionObj(trxItem.getString("timeStamp"), trxAmount.toString(), trxItem.getString("hash"), trxItem.getString("to"), trxItem.getString("from"),
+                                          trxItem.getString("contractAddress"), tokenSymbol, gas.toString());
                                 mTransactionArray.add(trxObj);
                             }
 
@@ -275,7 +281,7 @@ public class CryptoAPIHelper {
         String url = "https://api.etherscan.io/api?module=account&action=tokennfttx&contractaddress="
         + contractaddress
         + "&address=" + address
-        + "&sort=asc&apikey=" + ETHERSCAN_API_KEY;
+        + "&sort=desc&apikey=" + ETHERSCAN_API_KEY;
 
         sendAPIRequest(url, Web3Enum.ERC_BALANCE, "POST", tokenSymbol, null, null);
     }
@@ -333,31 +339,31 @@ public class CryptoAPIHelper {
         + contractAddress
         + "&address="
         + address
-        + "&page=1&sort=asc&apikey="
+        + "&page=1&offset=20&sort=desc&apikey="
         + ETHERSCAN_API_KEY;
 
         sendAPIRequest(url, Web3Enum.GET_ETH_TRX, "POST", ticker, null, null);
     }
 
     public void getBEPTrx(String address, String contractAddress, String ticker) {
-        String url = "https://api.bscscan.io/api?module=account&action=tokentx&contractaddress="
+        String url = "https://api.bscscan.com/api?module=account&action=tokentx&contractaddress="
         + contractAddress
         + "&address="
         + address
-        + "&page=1&sort=asc&apikey="
+        + "&page=1&offset=20&apikey="
         + BSCSCAN_API_KEY;
 
         sendAPIRequest(url, Web3Enum.GET_BEP_TRX, "POST", ticker, null, null);
     }
 
-    public void getBSCETHPrice(String address, boolean isEth, String ticker) {
-        String url = isEth ? "https://api.etherscan.io" : "https://api.bscscan.com"
+    public void getBSCETHTrx(String address, boolean isEth, String ticker) {
+        String url = (isEth ? "https://api.etherscan.io" : "https://api.bscscan.com")
         + "/api?module=account&action=txlist&address="
         + address
-        + "&page=1&sort=asc&apikey="
+        + "&page=1&offset=20&sort=desc&apikey="
         + (isEth ? ETHERSCAN_API_KEY : BSCSCAN_API_KEY);
 
-        sendAPIRequest(url, isEth ? Web3Enum.GET_ETH_TRX : Web3Enum.GET_BEP_TRX, "POST", ticker, null, null);
+        sendAPIRequest(url, (isEth ? Web3Enum.GET_ETH_TRX : Web3Enum.GET_BEP_TRX), "POST", ticker, null, null);
     }
 
     public void checkGasPrice(String gas, ConfigureTrxCallback callback, CoinType coinType) {

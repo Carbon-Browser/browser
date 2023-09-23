@@ -101,7 +101,7 @@
             android:layout_height="wrap_content"
             tools:ignore="HardcodedText" />
 
-        <View
+        <ImageView
             android:id="@+id/amount_token_icon"
             android:layout_width="24dp"
             android:layout_gravity="center_vertical"

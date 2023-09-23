@@ -32,6 +32,20 @@ import com.google.zxing.qrcode.QRCodeWriter;
 
 import org.json.JSONObject;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import android.graphics.drawable.Drawable;
+
+import org.chromium.chrome.browser.customtabs.CustomTabActivity;
+import java.util.Locale;
+import 	java.sql.Date;
+
+import java.text.SimpleDateFormat;
+
 import android.widget.ProgressBar;
 
 public class WalletTransaction extends Fragment implements TransactionCallback {
@@ -50,7 +64,6 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
     private String recipient;
     private String tokenTicker;
     private int status;
-    private int coinType;
     private String coinName;
     private String gas;
 
@@ -91,18 +104,21 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         if (getArguments() != null) {
-            drawableIcon = getArguments().getInt("COIN_ICON_KEY", -1);
             iconUrl = getArguments().getString("COIN_ICON_URL_KEY", "");
             tokenPriceUsd = getArguments().getString("COIN_USD_VALUE", "");
             tokenAmount = getArguments().getString("TRX_AMOUNT", "");
+
             date = getArguments().getString("TRX_DATE", "");
+            Date mDate = new Date(Long.parseLong(date)*1000l);
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault());
+            date = sdf.format(mDate);
+
             externalUrl = getArguments().getString("TRX_EXTERNAL_URL", "");
             contractAddress = getArguments().getString("COIN_CONTRACT_ADDRESS_KEY", "");
             hasBeenSent = getArguments().getBoolean("TRX_SENT_KEY", false);
             chainType = getArguments().getString("COIN_CHAIN_TYPE_KEY", "");
             recipient = getArguments().getString("TRX_RECIPIENT", "");
             tokenTicker = getArguments().getString("COIN_TICKER_KEY", "");
-            coinType = getArguments().getInt("COIN_TYPE_KEY", -1);
             status = getArguments().getInt("TRX_STATUS", -1);
             coinName = getArguments().getString("COIN_NAME_KEY", "");
             gas = getArguments().getString("TRX_GAS", "");
@@ -118,11 +134,25 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
         if (isLoadingTrx) loadingSpinner.setVisibility(View.VISIBLE);
 
         ImageView tokenIcon = view.findViewById(R.id.token_icon);
-        if (drawableIcon != -1) {
-            tokenIcon.setImageDrawable(view.getResources().getDrawable(drawableIcon));
-        } else {
-           // glide todo
-        }
+        Glide.with(tokenIcon)
+            .load(iconUrl)
+            //.thumbnail(0.05f)
+            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .fitCenter()
+            // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+            // .transform(new RoundedCorners(valueInDp))
+            .into(new CustomTarget<Drawable>() {
+                @Override
+                public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                    if (tokenIcon.getDrawable() == null)
+                        tokenIcon.setImageDrawable(resource);
+                }
+
+                @Override
+                public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                }
+            });
 
         errorTextView = view.findViewById(R.id.error_text);
 
@@ -136,7 +166,9 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
         externalButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // TODO
+                if (externalUrl.equals("") || externalUrl == null) return;
+                CustomTabActivity.showInfoPage(
+                        getActivity(), externalUrl);
             }
         });
 

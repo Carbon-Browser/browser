@@ -45,5 +45,11 @@ public interface WalletInterface {
 
   ArrayList<TokenObj> getTokenList();
 
+  ArrayList<TransactionObj> getTrxList();
+
   String[] getMnemonic();
+
+  void onNavigateTransactionView(TransactionObj trxObj);
+
+  String getWalletValue();
 }

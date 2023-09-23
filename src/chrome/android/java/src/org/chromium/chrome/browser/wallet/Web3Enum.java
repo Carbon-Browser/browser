@@ -22,7 +22,6 @@ public enum Web3Enum {
    BSC_GAS_CHECK,
 
    GET_BEP_TRX,
-   GET_BSC_TRX,
    GET_ETH_TRX,
    GET_BTC_TRX,
 }

@@ -1003,6 +1003,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/wallet/Web3Enum.java",
   "java/src/org/chromium/chrome/browser/wallet/CryptoAPIHelper.java",
   "java/src/org/chromium/chrome/browser/wallet/WalletInterface.java",
+  "java/src/org/chromium/chrome/browser/wallet/WalletDatabaseInterface.java",
   "java/src/org/chromium/chrome/browser/wallet/PinCodeInterface.java",
   "java/src/org/chromium/chrome/browser/wallet/MainTabFragment.java",
   "java/src/org/chromium/chrome/browser/wallet/CreateWalletMenu.java",

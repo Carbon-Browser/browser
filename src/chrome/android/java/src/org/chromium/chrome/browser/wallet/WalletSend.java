@@ -48,6 +48,14 @@ import android.view.KeyEvent;
 import com.google.zxing.Result;
 import me.dm7.barcodescanner.zxing.ZXingScannerView;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import android.graphics.drawable.Drawable;
+
 public class WalletSend extends Fragment implements ZXingScannerView.ResultHandler, ConfigureTrxCallback {
 
     private FrameLayout mCameraView;
@@ -92,7 +100,6 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
     public void onViewCreated(View view, Bundle savedInstanceState) {
         if (getArguments() != null) {
             mCoinName = getArguments().getString("COIN_NAME_KEY", "").toLowerCase();
-            mCoinIcon = getArguments().getInt("COIN_ICON_KEY", -1);
             mCoinIconUrl = getArguments().getString("COIN_ICON_URL_KEY");
             mCoinTicker = "$" + getArguments().getString("COIN_TICKER_KEY", "");
             mCoinBalance = getArguments().getString("COIN_BALANCE_KEY", "");
@@ -131,8 +138,26 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             }
         });
 
-        View tokenIcon = view.findViewById(R.id.amount_token_icon);
-        tokenIcon.setBackground(view.getContext().getResources().getDrawable(mCoinIcon));
+        ImageView tokenIcon = view.findViewById(R.id.amount_token_icon);
+        Glide.with(tokenIcon)
+            .load(mCoinIconUrl)
+            //.thumbnail(0.05f)
+            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .fitCenter()
+            // .apply(new RequestOptions().override((int)(125 * density), (int)(100 * density)))
+            // .transform(new RoundedCorners(valueInDp))
+            .into(new CustomTarget<Drawable>() {
+                @Override
+                public void onResourceReady(Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                    if (tokenIcon.getDrawable() == null)
+                        tokenIcon.setImageDrawable(resource);
+                }
+
+                @Override
+                public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                }
+            });
 
         TextView tokenTicker = view.findViewById(R.id.amount_token_name);
         tokenTicker.setText(mCoinTicker);

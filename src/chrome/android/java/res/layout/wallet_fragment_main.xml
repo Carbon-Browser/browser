@@ -26,21 +26,9 @@
                 android:textAllCaps="true"
                 android:textStyle="bold"
                 android:textSize="45sp"
+                android:layout_marginBottom="20dp"
                 android:textColor="@android:color/white"
                 android:text="$0"/>
-
-            <TextView
-                android:id="@+id/csix_balance_textview"
-                android:layout_height="wrap_content"
-                android:layout_width="wrap_content"
-                android:textAllCaps="false"
-                android:textStyle="bold"
-                android:textColor="#808080"
-                android:textSize="12sp"
-                android:layout_marginTop="10dp"
-                android:layout_marginBottom="20dp"
-                android:text="0 Carbon (CSIX)"
-                tools:ignore="HardcodedText" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -81,6 +69,7 @@
                 android:background="@drawable/rounded_background_wallet_black">
 
                 <TextView
+                    android:id="@+id/container_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textColor="@android:color/white"
@@ -115,6 +104,7 @@
                 android:background="@drawable/rounded_background_wallet_black">
 
                 <TextView
+                    android:id="@+id/container_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textColor="@android:color/white"
