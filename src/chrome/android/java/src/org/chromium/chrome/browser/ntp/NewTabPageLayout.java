@@ -438,8 +438,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     private void initialiseWeb3Features() {
         String textColor = isDarkMode ? "#ffffff" : "#000000";
 
-        TextView mComingSoonTitle = findViewById(R.id.coming_soon_textview);
-        mComingSoonTitle.setTextColor(Color.parseColor(textColor));
+        // TextView mComingSoonTitle = findViewById(R.id.coming_soon_textview);
+        // mComingSoonTitle.setTextColor(Color.parseColor(textColor));
 
         TextView mFeaturedDappsTitle = findViewById(R.id.featured_daps_textview);
         mFeaturedDappsTitle.setTextColor(Color.parseColor(textColor));
@@ -453,12 +453,14 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         walletTile.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Intent intent = new Intent();
-                intent.setClass(view.getContext(), WalletActivity.class);
+                // Intent intent = new Intent();
+                // intent.setClass(view.getContext(), WalletActivity.class);
+                //
+                // try {
+                //     ((ChromeActivity)getContext()).startActivityForResult(intent, 12345);
+                // } catch (Exception ignore) {}
 
-                try {
-                    ((ChromeActivity)getContext()).startActivityForResult(intent, 12345);
-                } catch (Exception ignore) {}
+                Toast.makeText(view.getContext(), "Coming Soon!", Toast.LENGTH_SHORT).show();
 
                 // IntentUtils.safeStartActivity(view.getContext(), intent);
             }
@@ -474,14 +476,14 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         comingSoonTile3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // loadUrl("https://carbon.website/csix/");
+                loadUrl("https://www.ldx.fi/");
             }
         });
 
         comingSoonTile4.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // loadUrl("https://carbon.website/csix/");
+                loadUrl("https://www.ldx.fi/");
             }
         });
 
@@ -500,24 +502,24 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
         FrameLayout walletBackground = walletTile.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout stakingTileBackground = stakingTile.findViewById(R.id.speed_dial_tile_view_icon_background);
-        FrameLayout comingSoonTile3Background = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon_background);
-        FrameLayout comingSoonTile4Background = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout swapBackground = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout bridgeBackground = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon_background);
 
         walletBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         stakingTileBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
-        comingSoonTile3Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
-        comingSoonTile4Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        swapBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        bridgeBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
 
         ImageView walletTileImage = walletTile.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView stakingTileImage = stakingTile.findViewById(R.id.speed_dial_tile_view_icon);
-        ImageView comingSoonTile3Image = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon);
-        ImageView comingSoonTile4Image = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView swapTileImage = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView bridgeTileImage = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon);
 
 
         walletTileImage.setBackground(getResources().getDrawable(R.drawable.ic_wallet));
         stakingTileImage.setBackground(getResources().getDrawable(R.drawable.ic_staking));
-        comingSoonTile3Image.setBackground(getResources().getDrawable(R.drawable.ic_swap));
-        comingSoonTile4Image.setBackground(getResources().getDrawable(R.drawable.ic_bridge));
+        swapTileImage.setBackground(getResources().getDrawable(R.drawable.ic_swap));
+        bridgeTileImage.setBackground(getResources().getDrawable(R.drawable.ic_bridge));
     }
 
     private void loadUrl(String url) {

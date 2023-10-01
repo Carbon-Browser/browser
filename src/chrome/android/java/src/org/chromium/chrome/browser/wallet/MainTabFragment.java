@@ -90,6 +90,14 @@ public class MainTabFragment extends Fragment implements WalletDatabaseInterface
             }
         });
 
+        View mPreferencesButton = view.findViewById(R.id.wallet_preferences);
+        mPreferencesButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                ((WalletInterface) getActivity()).onNavigatePreferences();
+            }
+        });
+
         calculateTotal();
         drawTrxView();
         drawTokenView();

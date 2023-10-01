@@ -37,7 +37,7 @@ public class TrxObj {
 
     public TrxObj(int drawableIcon, String iconUrl, String tokenPriceUsd, String tokenAmount, String date, String externalUrl,
             String contractAddress, boolean hasBeenSent, String chainType, String recipient, int status, String coinName,
-            int coinType, String gas) {
+            int coinType, String gas, String tokenTicker) {
         this.drawableIcon = drawableIcon;
         this.iconUrl = iconUrl;
         this.tokenPriceUsd = tokenPriceUsd;
@@ -52,5 +52,7 @@ public class TrxObj {
         this.coinName = coinName;
         this.coinType = coinType;
         this.gas = gas;
+
+        this.tokenTicker = tokenTicker;
     }
 }

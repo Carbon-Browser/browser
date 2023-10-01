@@ -96,7 +96,9 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
                 statusTextView.setText("Cancelled");
             } else {
                 // handle success
-
+                JSONObject jsonObject = new JSONObject(result);
+                externalUrl = chainType.equals("BEP20") ? "https://etherscan.io/tx/" : "https://bscscan.com/tx/";
+                externalUrl = externalUrl + jsonObject.getString("result");
             }
         } catch (Exception e) {}
     }

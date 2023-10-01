@@ -43,6 +43,8 @@ public interface WalletInterface {
 
   void onReceivedTransactions(ArrayList<TransactionObj> list);
 
+  void onReceivedNonce(String tokenSymbol, String nonce);
+
   ArrayList<TokenObj> getTokenList();
 
   ArrayList<TransactionObj> getTrxList();
@@ -51,5 +53,13 @@ public interface WalletInterface {
 
   void onNavigateTransactionView(TransactionObj trxObj);
 
+  void onNavigatePreferences();
+
   String getWalletValue();
+
+  void onNavigateCustomTokens();
+
+  void onNavigateAddCustomToken();
+
+  void exitWallet();
 }

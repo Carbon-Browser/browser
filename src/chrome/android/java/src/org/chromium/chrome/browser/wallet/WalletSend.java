@@ -101,7 +101,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
         if (getArguments() != null) {
             mCoinName = getArguments().getString("COIN_NAME_KEY", "").toLowerCase();
             mCoinIconUrl = getArguments().getString("COIN_ICON_URL_KEY");
-            mCoinTicker = "$" + getArguments().getString("COIN_TICKER_KEY", "");
+            mCoinTicker = getArguments().getString("COIN_TICKER_KEY", "");
             mCoinBalance = getArguments().getString("COIN_BALANCE_KEY", "");
             mCoinType = getArguments().getInt("COIN_TYPE_KEY", -1);
             mCoinUSDValue = getArguments().getString("COIN_BALANCE_KEY", "");
@@ -160,7 +160,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             });
 
         TextView tokenTicker = view.findViewById(R.id.amount_token_name);
-        tokenTicker.setText(mCoinTicker);
+        tokenTicker.setText("$"+mCoinTicker);
 
         Button nextButton = view.findViewById(R.id.button_next);
         nextButton.setOnClickListener(new View.OnClickListener() {

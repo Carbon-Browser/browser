@@ -29,7 +29,6 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import java.math.BigInteger;
 import java.math.BigDecimal;
-import wallet.core.java.AnySigner;
 import wallet.core.jni.CoinType;
 import wallet.core.jni.HDWallet;
 import wallet.core.jni.PrivateKey;
@@ -47,6 +46,9 @@ import android.icu.util.Calendar;
 import java.util.Locale;
 import java.util.ArrayList;
 import android.icu.text.SimpleDateFormat;
+
+import java.math.RoundingMode;
+import android.icu.math.MathContext;
 
 public class WalletActivity extends ChromeBaseAppCompatActivity implements WalletInterface {
 
@@ -165,103 +167,104 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
     }
 
     @Override
+    public void onReceivedNonce(String tokenSymbol, String nonce) {
+        TokenDatabase.getInstance(this).setTokenNonce(tokenSymbol, nonce);
+    }
+
+    @Override
     public void sendTransaction(TransactionCallback callback) {
         try {
             CryptoAPIHelper mCryptoAPIHelper = new CryptoAPIHelper(this);
 
-            CoinType coinType = CoinType.createFromValue(mPendingTrx.coinType);
+            final CoinType coinType = mPendingTrx.chainType.equals("BEP20") ? CoinType.SMARTCHAIN : CoinType.ETHEREUM;
             boolean isTokenCustomType = !mPendingTrx.contractAddress.equals("");
 
-//             if (coinType == CoinType.BITCOIN) {
-//
-//             } else {
-//                 final PrivateKey secretPrivateKey = mWallet.getKeyForCoin(coinType);
-//                 final String receiverAddress = mPendingTrx.recipient;
-//
-//                 final BigDecimal wei = new BigDecimal("1000000000000000000");
-//                 BigDecimal gasDecimal = new BigDecimal(mPendingTrx.gas);
-//                 gasDecimal = gasDecimal.multiply(wei);
-//                 BigInteger gas = gasDecimal.toBigInteger();
-//
-//                 BigDecimal amountDecimal = new BigDecimal(mPendingTrx.tokenAmount);
-//                 amountDecimal = amountDecimal.multiply(wei);
-//                 BigInteger amount = amountDecimal.toBigInteger();
-//
-//                 String gasString = gas.toString(16);
-//                 String amountString = amount.toString(16);
-//
-//                 Ethereum.SigningInput.Builder signerInputBuilder = Ethereum.SigningInput.newBuilder();
-//
-//                 signerInputBuilder.setChainId(ByteString.copyFrom((new BigInteger("01")).toByteArray()));
-//                 signerInputBuilder.setGasPrice(this.toByteString(new BigInteger(gasString, 16)));
-//                 signerInputBuilder.setGasLimit(this.toByteString(new BigInteger("5208", 16)));
-//                 signerInputBuilder.setPrivateKey(ByteString.copyFrom(secretPrivateKey.data()));
-//
-//                 if ((coinType == CoinType.ETHEREUM  || coinType == CoinType.SMARTCHAIN) && mPendingTrx.contractAddress.equals("")) {
-//                     // ethereum mainnet
-//                     signerInputBuilder.setToAddress(receiverAddress);
-//
-//                     Ethereum.Transaction.Builder ethTrxBuilder = Ethereum.Transaction.newBuilder();
-//
-//                     Ethereum.Transaction.Transfer.Builder ethTrxTransferBuilder = Ethereum.Transaction.Transfer.newBuilder();
-//                     ethTrxTransferBuilder.setAmount(this.toByteString(new BigInteger(amountString, 16)));
-//
-//                     ethTrxBuilder.setTransfer(ethTrxTransferBuilder.build());
-//
-//                     signerInputBuilder.setTransaction(ethTrxBuilder.build());
-//
-//                     Ethereum.SigningInput signerInput = signerInputBuilder.build();
-//
-//                     if (mPendingTrx.chainType.equals("BEP20")) {
-//                         Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, CoinType.SMARTCHAIN, Ethereum.SigningOutput.parser());
-//                         mCryptoAPIHelper.sendAPIRequest("https://api.bscscan.com/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=UVMB2DE897HHNS5UX5U5X4U438N54F73IG",
-//                             Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-//                     } else {
-//                         Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, CoinType.ETHEREUM, Ethereum.SigningOutput.parser());
-//                         mCryptoAPIHelper.sendAPIRequest("https://api.etherscan.io/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ",
-//                             Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-//                     }
-//                 } else {
-//                     // BEP/ERC20
-//                     signerInputBuilder.setToAddress(mPendingTrx.contractAddress); // contract address
-//
-//                     if (mPendingTrx.chainType.equals("BEP20")) {
-//                         // bep20
-//                         Ethereum.Transaction.Builder ethTrxBuilder = Ethereum.Transaction.ContractGeneric.newBuilder();
-//
-//                         Ethereum.Transaction.ContractGeneric.Transfer.Builder ethTrxTransferBuilder = Ethereum.Transaction.ContractGeneric.newBuilder();
-//                         ethTrxTransferBuilder.setAmount(this.toByteString(new BigInteger(amountString, 16)));
-//                         ethTrxTransferBuilder.setTo(receiverAddress);
-//
-//                         ethTrxBuilder.setErc20Transfer(ethTrxTransferBuilder.build());
-//
-//                         signerInputBuilder.setTransaction(ethTrxBuilder.build());
-//
-//                         Ethereum.SigningInput signerInput = signerInputBuilder.build();
-//
-//                         Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, CoinType.SMARTCHAIN, Ethereum.SigningOutput.parser());
-//                         mCryptoAPIHelper.sendAPIRequest("https://api.bscscan.com/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=UVMB2DE897HHNS5UX5U5X4U438N54F73IG",
-//                             Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-//                     } else {
-//                         // erc20
-//                         Ethereum.Transaction.Builder ethTrxBuilder = Ethereum.Transaction.newBuilder();
-//
-//                         Ethereum.Transaction.ERC20Transfer.Builder ethTrxTransferBuilder = Ethereum.Transaction.ERC20Transfer.newBuilder();
-//                         ethTrxTransferBuilder.setAmount(this.toByteString(new BigInteger(amountString, 16)));
-//                         ethTrxTransferBuilder.setTo(receiverAddress);
-//
-//                         ethTrxBuilder.setErc20Transfer(ethTrxTransferBuilder.build());
-//
-//                         signerInputBuilder.setTransaction(ethTrxBuilder.build());
-//
-//                         Ethereum.SigningInput signerInput = signerInputBuilder.build();
-//
-//                         Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, CoinType.ETHEREUM, Ethereum.SigningOutput.parser());
-//                         mCryptoAPIHelper.sendAPIRequest("https://api.etherscan.io/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ",
-//                             Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-//                     }
-//                 }
-            // }
+            if (coinType == CoinType.BITCOIN) {
+
+            } else {
+                final PrivateKey secretPrivateKey = mWallet.getKeyForCoin(coinType);
+                final String receiverAddress = mPendingTrx.recipient;
+
+                final BigDecimal wei = new BigDecimal("1000000000000000000");
+                final BigDecimal gasLimitMax = new BigDecimal("21");
+
+                BigDecimal gasDecimal = new BigDecimal(mPendingTrx.gas);
+
+                gasDecimal = gasDecimal.multiply(wei);
+                BigInteger gas = gasDecimal.toBigInteger();
+
+                BigDecimal amountDecimal = new BigDecimal(mPendingTrx.tokenAmount);
+                amountDecimal = amountDecimal.multiply(wei);
+                BigInteger amount = amountDecimal.toBigInteger();
+
+                String gasString = gas.toString(16);
+                String amountString = amount.toString(16);
+
+                Ethereum.SigningInput.Builder signerInputBuilder = Ethereum.SigningInput.newBuilder();
+
+                String nonce =  TokenDatabase.getInstance(this).getTokenNonce(mPendingTrx.tokenTicker);
+
+                BigInteger nonceBigInteger = new BigInteger(nonce);
+                nonceBigInteger.add(BigInteger.ONE);
+
+                TokenDatabase.getInstance(this).setTokenNonce(mPendingTrx.tokenTicker, nonceBigInteger.toString());
+
+                signerInputBuilder.setChainId(ByteString.copyFrom((new BigInteger(mPendingTrx.chainType.equals("BEP20") ? "56" : "01")).toByteArray()));
+                signerInputBuilder.setGasPrice(this.toByteString(gas));
+                signerInputBuilder.setGasLimit(this.toByteString(new BigInteger("5208", 16)));
+                signerInputBuilder.setNonce(this.toByteString(nonceBigInteger));
+                signerInputBuilder.setPrivateKey(ByteString.copyFrom(secretPrivateKey.data()));
+
+                if ((coinType == CoinType.ETHEREUM || coinType == CoinType.SMARTCHAIN) && (mPendingTrx.contractAddress.equals("") || mPendingTrx.contractAddress == null || mPendingTrx.contractAddress.equals("null"))) {
+                    // ethereum mainnet
+                    signerInputBuilder.setToAddress(receiverAddress);
+
+                    Ethereum.Transaction.Builder ethTrxBuilder = Ethereum.Transaction.newBuilder();
+
+                    Ethereum.Transaction.Transfer.Builder ethTrxTransferBuilder = Ethereum.Transaction.Transfer.newBuilder();
+                    ethTrxTransferBuilder.setAmount(this.toByteString(new BigInteger(amountString, 16)));
+
+                    ethTrxBuilder.setTransfer(ethTrxTransferBuilder.build());
+
+                    signerInputBuilder.setTransaction(ethTrxBuilder.build());
+
+                    Ethereum.SigningInput signerInput = signerInputBuilder.build();
+
+                    if (mPendingTrx.chainType.equals("BEP20")) {
+                        Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, CoinType.ETHEREUM, Ethereum.SigningOutput.parser());
+                        mCryptoAPIHelper.sendAPIRequest("https://api.bscscan.com/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=UVMB2DE897HHNS5UX5U5X4U438N54F73IG",
+                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
+                    } else {
+                        Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, CoinType.ETHEREUM, Ethereum.SigningOutput.parser());
+                        mCryptoAPIHelper.sendAPIRequest("https://api.etherscan.io/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ",
+                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
+                    }
+                } else {
+                    // BEP/ERC20
+                    signerInputBuilder.setToAddress(mPendingTrx.contractAddress); // contract address
+
+                    Ethereum.Transaction.Builder ethTrxBuilder = Ethereum.Transaction.newBuilder();
+
+                    Ethereum.Transaction.ERC20Transfer.Builder ethTrxTransferBuilder = Ethereum.Transaction.ERC20Transfer.newBuilder();
+                    ethTrxTransferBuilder.setAmount(this.toByteString(new BigInteger(amountString, 16)));
+                    ethTrxTransferBuilder.setTo(receiverAddress);
+
+                    ethTrxBuilder.setErc20Transfer(ethTrxTransferBuilder.build());
+
+                    signerInputBuilder.setTransaction(ethTrxBuilder.build());
+
+                    Ethereum.SigningInput signerInput = signerInputBuilder.build();
+
+                    Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
+                    if (mPendingTrx.chainType.equals("BEP20")) {
+                        mCryptoAPIHelper.sendAPIRequest("https://api.bscscan.com/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=UVMB2DE897HHNS5UX5U5X4U438N54F73IG",
+                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
+                    } else {
+                        mCryptoAPIHelper.sendAPIRequest("https://api.etherscan.io/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), false) + "&apikey=EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ",
+                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
+                    }
+                }
+            }
         } catch (Exception e) {
 
         }
@@ -276,6 +279,14 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                 setResult(Activity.RESULT_OK, null);
                 finish();
             }
+        } catch (Exception ignore) {}
+    }
+
+    @Override
+    public void exitWallet() {
+        try {
+            setResult(Activity.RESULT_OK, null);
+            finish();
         } catch (Exception ignore) {}
     }
 
@@ -484,15 +495,13 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     @Override
     public void onNavigateVerifyTrx(String mCoinName, int mCoinIcon, String mCoinIconUrl, String mCoinTicker, String mCoinBalance, int mCoinType,
-            String mRecipientAddress, String mAmount, String mGas, String mCoinUSDValue, String mContractAddress, String mChainType) {
+                                    String mRecipientAddress, String mAmount, String mGas, String mCoinUSDValue, String mContractAddress, String mChainType) {
 
-        Date c = Calendar.getInstance().getTime();
-
-        SimpleDateFormat df = new SimpleDateFormat("dd-MMM-yyyy", Locale.getDefault());
-        String date = df.format(c);
+        Long datel = System.currentTimeMillis()/1000;
+        String date = datel.toString();
 
         mPendingTrx = new TrxObj(mCoinIcon, mCoinIconUrl, mCoinUSDValue, mAmount, date, "",
-            mContractAddress, false, mChainType, mRecipientAddress, 1, mCoinName, mCoinType, mGas);
+                mContractAddress, false, mChainType, mRecipientAddress, 1, mCoinName, mCoinType, mGas, mCoinTicker);
 
         Bundle verifyTrxBundle = new Bundle();
         verifyTrxBundle.putString("PIN_CODE_KEY", mPinCode);
@@ -528,10 +537,14 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     private void importWallet() {
         try {
-            mWallet = new HDWallet(mMnemonicString, mPinCode);
+            mWallet = new HDWallet(mMnemonicString, mPinCode, true);
 
             if (mSharedPreferences == null) mSharedPreferences = new EncryptSharedPreferences(this).getSharedPreferences();
             mSharedPreferences.edit().putString("MNEMONIC_KEY", mWallet.mnemonic()).commit();
+
+            fetchBalance();
+
+            getTokenTrx();
 
             MainTabFragment mMainTabFragment = new MainTabFragment();
             mWalletDatabaseInterface = mMainTabFragment;
@@ -565,34 +578,45 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                 .commit();
     }
 
-    private ByteString toByteString(BigInteger byteStr) {
-        return ByteString.copyFrom(byteStr.toByteArray());
+    private ByteString toByteString(BigInteger bigInteger) {
+        return ByteString.copyFrom(bigInteger.toByteArray());
     }
 
-    private String toHexString(byte[] byteStr, boolean withPrefix) {
-      StringBuilder stringBuilder = new StringBuilder();
-      if (withPrefix) {
-         stringBuilder.append("0x");
-      }
+    public String toHexString(byte[] data, boolean withPrefix) {
+        StringBuilder stringBuilder = new StringBuilder();
+        if (withPrefix) {
+            stringBuilder.append("0x");
+        }
+        for (byte element : data) {
+            stringBuilder.append(String.format("%02x", element & 0xFF));
+        }
 
-      byte[] var6 = byteStr;
-      int var7 = byteStr.length;
+        return stringBuilder.toString();
+    }
 
-      for(int var5 = 0; var5 < var7; ++var5) {
-         byte element = var6[var5];
-         String var9 = "%02x";
-         Object[] var10001 = new Object[1];
-         byte var11 = (byte)255;
-         var10001[0] = (byte)(element & var11);
-         Object[] var10 = var10001;
-         String var12 = String.format(var9, java.util.Arrays.copyOf(var10, var10.length));
+    @Override
+    public void onNavigateAddCustomToken() {
+        getSupportFragmentManager().beginTransaction()
+                .addToBackStack(null)
+                .replace(R.id.wallet_fragment_container_view, WalletPreferencesAddCustomToken.class, null)
+                .commit();
+    }
 
-         stringBuilder.append(var12);
-      }
+    @Override
+    public void onNavigateCustomTokens() {
+        getSupportFragmentManager().beginTransaction()
+                .addToBackStack(null)
+                .replace(R.id.wallet_fragment_container_view, WalletPreferencesCustomTokens.class, null)
+                .commit();
+    }
 
-      String var10000 = stringBuilder.toString();
-      return var10000;
-   }
+    @Override
+    public void onNavigatePreferences() {
+        getSupportFragmentManager().beginTransaction()
+                .addToBackStack(null)
+                .replace(R.id.wallet_fragment_container_view, WalletPreferences.class, null)
+                .commit();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

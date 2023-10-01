@@ -23,7 +23,7 @@ class TokenDatabase extends SQLiteOpenHelper {
     // All Static variables
     // Database Version
     // !-- If you change the database schema, must increment the database version --!
-    private static final int DATABASE_VERSION = 15;
+    private static final int DATABASE_VERSION = 16;
 
     // Database Name
     private static final String DATABASE_NAME = "cw_db";
@@ -40,6 +40,7 @@ class TokenDatabase extends SQLiteOpenHelper {
     private final String KEY_TOKEN_SYMBOL = "tokenSymbol";
     private final String KEY_TOKEN_CONTRACT_ADDRESS = "tokenContractAddress";
     private final String KEY_TOKEN_CHAIN_NAME = "tokenChainName";
+    private final String KEY_HIGHEST_LATEST_NONCE = "tokenNonce";
 
     private final String KEY_TIMESTAMP = "trxTimestamp";
     private final String KEY_AMOUNT = "trxAmount";
@@ -72,7 +73,8 @@ class TokenDatabase extends SQLiteOpenHelper {
                 + KEY_TOKEN_BALANCE + " VARCHAR,"
                 + KEY_TOKEN_SYMBOL + " VARCHAR PRIMARY KEY,"
                 + KEY_TOKEN_CONTRACT_ADDRESS + " VARCHAR,"
-                + KEY_TOKEN_CHAIN_NAME + " VARCHAR"
+                + KEY_TOKEN_CHAIN_NAME + " VARCHAR,"
+                + KEY_HIGHEST_LATEST_NONCE + " VARCHAR"
                 + ")";
         db.execSQL(CREATE_WALLET_TABLE);
 
@@ -91,8 +93,8 @@ class TokenDatabase extends SQLiteOpenHelper {
         for (int i = 0; i != mTokenArray.size(); i++) {
             TokenObj tokenObj = mTokenArray.get(i);
 
-            String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + ")";
-            String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" +tokenObj.chainName + "')";
+            String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + ","+ KEY_HIGHEST_LATEST_NONCE + ")";
+            String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" +tokenObj.chainName + "','" + "0" + "')";
             String query = "INSERT INTO "
                     + TABLE_CW
                     + COLUMNS
@@ -264,10 +266,8 @@ class TokenDatabase extends SQLiteOpenHelper {
             SQLiteDatabase db = getWritableDatabase();
 
             try {
-                db.beginTransaction();
-
-                String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + ")";
-                String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" + tokenObj.chainName + "')";
+                String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + "," + KEY_HIGHEST_LATEST_NONCE + ")";
+                String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" + tokenObj.chainName + "','" + "0" + "')";
                 String query = "INSERT OR REPLACE INTO "
                         + TABLE_CW
                         + COLUMNS
@@ -275,10 +275,7 @@ class TokenDatabase extends SQLiteOpenHelper {
 
                 db.execSQL(query);
                 db.close();
-                db.setTransactionSuccessful();
-            } finally {
-                db.endTransaction();
-            }
+            } catch (Exception ignore) {}
         }
     }
 
@@ -367,6 +364,54 @@ class TokenDatabase extends SQLiteOpenHelper {
             SQLiteDatabase db = getWritableDatabase();
 
             db.execSQL("DELETE FROM " + TABLE_CW + " WHERE " + KEY_TOKEN_SYMBOL + "= '" + tokenSymbol + "'");
+            db.close();
+        }
+    }
+
+    public String getTokenNonce(String tokenSymbol) {
+      synchronized (sInstance) {
+          SQLiteDatabase db = getReadableDatabase();
+
+          String nonce = "";
+
+          try {
+              String selectQuery = "SELECT * FROM " + TABLE_CW + " WHERE " + KEY_TOKEN_SYMBOL + "= '" + tokenSymbol + "'";
+              Cursor cursor = db.rawQuery(selectQuery, null);
+              if (cursor.moveToFirst()) {
+                  nonce = cursor.getString(7);
+              }
+          } catch (Exception e) {
+
+          }
+          db.close();
+
+          return nonce;
+      }
+    }
+
+    public void setTokenNonce(String tokenSymbol, String nonce) {
+        synchronized (sInstance) {
+            SQLiteDatabase db = getWritableDatabase();
+
+            try {
+              db.execSQL("UPDATE " + TABLE_CW + " SET " + KEY_HIGHEST_LATEST_NONCE + "= '" + nonce + "' WHERE " + KEY_TOKEN_SYMBOL + "= '" + tokenSymbol + "'");
+            } catch (Exception e) {
+
+            }
+            db.close();
+        }
+    }
+
+    public void clearDatabase() {
+        synchronized (sInstance) {
+            SQLiteDatabase db = getWritableDatabase();
+
+            db.execSQL("DROP TABLE IF EXISTS " + TABLE_CW);
+
+            db.execSQL("DROP TABLE IF EXISTS " + TABLE_TRX);
+
+            onCreate(db);
+
             db.close();
         }
     }

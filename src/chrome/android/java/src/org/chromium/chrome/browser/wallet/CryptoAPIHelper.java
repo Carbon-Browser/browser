@@ -90,22 +90,10 @@ public class CryptoAPIHelper {
                     switch(type) {
                         case BEP_PRICE:
                         case ERC_PRICE:
-                            // api result format below
-                            //   [
-                            //    {
-                            //       "address":"0x04756126f044634c9a0f0e985e60c88a51acc206",
-                            //       "chainId":56,
-                            //       "priceUsd":0.016067208642687368,
-                            //       "priceUsd24hAgo":0.017198885158025704,
-                            //       "totalReserveUsd":142209.38681179105,
-                            //       "marketCapUsd":1.606078174366006E7
-                            //    }
-                            // ]
-
                             JSONArray resultArr = new JSONArray(result);
                             for (int i = 0; i != resultArr.length(); i++) {
                                 JSONObject item = resultArr.getJSONObject(i);
-                                mWalletInterface.onReceivedCustomTokenPrice(tokenSymbol, item.getDouble("priceUsd")); //item.getString("address")
+                                mWalletInterface.onReceivedCustomTokenPrice(tokenSymbol, item.getDouble("priceUsd"));
                             }
                             break;
                         default:
@@ -173,6 +161,9 @@ public class CryptoAPIHelper {
                             JSONObject jsonresult = new JSONObject(result);
                             JSONArray resultArray = jsonresult.getJSONArray("result");
                             ArrayList<TransactionObj> mTransactionArray = new ArrayList<TransactionObj>();
+
+                            int highestNonce = 0;
+
                             for (int i = 0; i != resultArray.length(); i++) {
                                 JSONObject trxItem = resultArray.getJSONObject(i);
 
@@ -180,6 +171,8 @@ public class CryptoAPIHelper {
                                 BigDecimal wei = new BigDecimal(1000000000000000000l);
                                 MathContext mc = new MathContext(6);
                                 trxAmount = trxAmount.divide(wei, mc);
+
+                                if (trxItem.getInt("nonce") > highestNonce) highestNonce = trxItem.getInt("nonce");
 
                                 BigDecimal gasPrice = new BigDecimal(trxItem.getString("gasPrice"));
                                 BigDecimal gasUsed = new BigDecimal(trxItem.getString("gasUsed"));
@@ -192,6 +185,8 @@ public class CryptoAPIHelper {
                             }
 
                             mWalletInterface.onReceivedTransactions(mTransactionArray);
+
+                            mWalletInterface.onReceivedNonce(tokenSymbol, highestNonce+"");
                         } catch (Exception ignore) {
 
                         }

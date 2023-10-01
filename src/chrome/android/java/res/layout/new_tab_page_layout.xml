@@ -298,7 +298,7 @@
                 android:background="@drawable/ntp_rounded_background"
                 android:orientation="vertical">
 
-                <TextView
+                <!-- <TextView
                     android:id="@+id/coming_soon_textview"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -309,7 +309,7 @@
                     android:layout_marginTop="14dp"
                     android:textSize="14sp"
                     android:text="@string/coming_soon"
-                    android:layout_gravity="center" />
+                    android:layout_gravity="center" /> -->
 
                 <LinearLayout
                     android:layout_width="match_parent"
