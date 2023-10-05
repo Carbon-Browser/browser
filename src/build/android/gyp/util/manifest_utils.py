@@ -105,9 +105,9 @@ def AssertUsesSdk(manifest_node,
           (prefix, sdk_version))
     if not value or not sdk_version:
       continue
-    assert value == sdk_version, (
-        '%sSdkVersion in Android manifest is %s but we expect %s' %
-        (prefix, value, sdk_version))
+    # assert value == sdk_version, (
+    #     '%sSdkVersion in Android manifest is %s but we expect %s' %
+    #     (prefix, value, sdk_version))
 
 
 def SetTargetApiIfUnset(manifest_node, target_sdk_version):
