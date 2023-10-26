@@ -453,14 +453,12 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         walletTile.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // Intent intent = new Intent();
-                // intent.setClass(view.getContext(), WalletActivity.class);
-                //
-                // try {
-                //     ((ChromeActivity)getContext()).startActivityForResult(intent, 12345);
-                // } catch (Exception ignore) {}
+                Intent intent = new Intent();
+                intent.setClass(view.getContext(), WalletActivity.class);
 
-                Toast.makeText(view.getContext(), "Coming Soon!", Toast.LENGTH_SHORT).show();
+                try {
+                    ((ChromeActivity)getContext()).startActivityForResult(intent, 12345);
+                } catch (Exception ignore) {}
 
                 // IntentUtils.safeStartActivity(view.getContext(), intent);
             }

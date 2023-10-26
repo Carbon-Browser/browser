@@ -344,8 +344,14 @@ by a child template that "extends" this file.
 
         <activity android:name="org.chromium.chrome.browser.wallet.WalletActivity"
           android:theme="@style/AppTheme.NoActionBar"
-          android:screenOrientation="portrait" 
-          android:launchMode="singleTask" />
+          android:screenOrientation="portrait"
+          android:launchMode="singleTask">
+
+          <!-- <intent-filter>
+            <action android:name="WalletActivity.intent.action.Launch" />
+            <category android:name="android.intent.category.DEFAULT" />
+          </intent-filter> -->
+        </activity>
 
         <activity android:name="org.chromium.chrome.browser.media.MediaLauncherActivity"
             android:theme="@style/Theme.BrowserUI.NoDisplay"
