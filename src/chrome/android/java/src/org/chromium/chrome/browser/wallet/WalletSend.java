@@ -56,6 +56,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import android.graphics.drawable.Drawable;
 
+import java.math.RoundingMode;
+
 public class WalletSend extends Fragment implements ZXingScannerView.ResultHandler, ConfigureTrxCallback {
 
     private FrameLayout mCameraView;
@@ -81,6 +83,8 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
 
     private boolean isCameraShown = false;
 
+    private EditText gasEditText;
+
     public WalletSend() {
         super(R.layout.wallet_fragment_send);
     }
@@ -90,10 +94,51 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
         // eth result in seconds
         try {
             JSONObject jsonResult = new JSONObject(result);
-            float seconds = Float.parseFloat(jsonResult.getString("result"));
+            // float estimate = Float.parseFloat(jsonResult.getString("result"));
 
-            mGasTimeEstimate.setText("Estimated transaction time: " + (seconds/60) + " minutes");
+            gasEditText.setText(jsonResult.getString("result"));
         } catch (Exception ignore) {}
+    }
+
+    @Override
+    public void onGasEstimateReceived(String result) {
+        try {
+            boolean isCustomType = mContractAddress != null && !"".equals(mContractAddress) && !"null".equals(mContractAddress);
+
+            JSONObject jsonResult = new JSONObject(result);
+            String result16 = jsonResult.getString("result");
+
+            // Remove the '0x' prefix
+            result16 = result16.startsWith("0x") ? result16.substring(2) : result16;
+
+            // Convert the hex string to a BigInteger, then to BigDecimal
+            BigDecimal amountDecimal = new BigDecimal(new BigInteger(result16, 16));
+
+            // Convert from wei to ether
+            BigDecimal wei = new BigDecimal("1000000000000000000");
+            amountDecimal = amountDecimal.divide(wei);
+
+            amountDecimal = removeZerosAfterDecimal(amountDecimal, 5);
+
+            // Do something with amountDecimal
+            gasEditText.setText(amountDecimal.toPlainString());
+
+            BigDecimal tokenDollarValue = new BigDecimal(mCoinUSDValue);
+            BigDecimal limitDefault = new BigDecimal("21000");
+            BigDecimal limitCustom = new BigDecimal("180000");
+
+            BigDecimal maxFeeToken = amountDecimal.multiply(isCustomType ? limitCustom : limitDefault);
+            maxFeeToken = maxFeeToken.setScale(8, RoundingMode.HALF_UP);
+            BigDecimal maxFeeDollar = maxFeeToken.multiply(tokenDollarValue);
+            maxFeeDollar = maxFeeDollar.setScale(3, RoundingMode.HALF_UP);
+
+            String fuel = mChainType.equals("BEP20") ? "BSC" : "ETH";
+            mGasTimeEstimate.setText("Max Network Fee: $" + maxFeeDollar.toPlainString() + " / " + maxFeeToken.toPlainString() + " " + fuel);
+        } catch (Exception ignore) {}
+    }
+
+    private BigDecimal removeZerosAfterDecimal(BigDecimal number, int zerosToRemove) {
+        return number.multiply(BigDecimal.TEN.pow(zerosToRemove));
     }
 
     @Override
@@ -104,7 +149,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             mCoinTicker = getArguments().getString("COIN_TICKER_KEY", "");
             mCoinBalance = getArguments().getString("COIN_BALANCE_KEY", "");
             mCoinType = getArguments().getInt("COIN_TYPE_KEY", -1);
-            mCoinUSDValue = getArguments().getString("COIN_BALANCE_KEY", "");
+            mCoinUSDValue = getArguments().getString("COIN_USD_VALUE", "");
             mContractAddress = getArguments().getString("COIN_CONTRACT_ADDRESS_KEY", "");
             mChainType = getArguments().getString("COIN_CHAIN_TYPE_KEY", "");
         }
@@ -178,7 +223,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
         });
 
         EditText recipientEditText = view.findViewById(R.id.trx_recipient_address);
-        EditText gasEditText = view.findViewById(R.id.trx_gas_amount);
+        gasEditText = view.findViewById(R.id.trx_gas_amount);
         EditText amountEditText = view.findViewById(R.id.trx_amount);
 
         recipientEditText.addTextChangedListener(new TextWatcher() {
@@ -205,7 +250,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             @Override
             public void onFocusChange(View v, boolean hasFocus) {
               if (!hasFocus) {
-                 checkGas();
+                 // checkGas();
               }
             }
          });
@@ -216,7 +261,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
                 if ((event.getAction() == KeyEvent.ACTION_DOWN) &&
                         (keyCode == KeyEvent.KEYCODE_ENTER)) {
                     // Perform action on key press
-                    checkGas();
+                    // checkGas();
                     return true;
                 }
                 return false;
@@ -308,17 +353,31 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
                 amountEditText.setText(mCoinBalance);
             }
         });
+
+        TextView autoGasButton = view.findViewById(R.id.gas_auto_button);
+        autoGasButton.getPaint().setShader(textShader);
+
+        autoGasButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (mRecipientAddress == null || mRecipientAddress.equals("")) {
+                  Toast.makeText(getActivity(), "Please enter recipient address.", Toast.LENGTH_SHORT).show();
+                  return;
+                }
+                ((WalletInterface) getActivity()).getTokenGasEstimate(mAmount, mChainType, mRecipientAddress, mContractAddress, WalletSend.this);
+            }
+        });
     }
 
-    private void checkGas() {
-        if (mGas != null && !mGas.equals("")) {
-           BigDecimal wei = new BigDecimal("1000000000000000000");
-
-           BigDecimal gasDecimal = new BigDecimal(mGas);
-           gasDecimal = gasDecimal.multiply(wei);
-           ((WalletInterface) getActivity()).checkGasPrice(gasDecimal.toBigInteger().toString(), WalletSend.this, mCoinType);
-        }
-    }
+    // private void checkGas() {
+    //     if (mGas != null && !mGas.equals("")) {
+    //        BigDecimal wei = new BigDecimal("1000000000000000000");
+    //
+    //        BigDecimal gasDecimal = new BigDecimal(mGas);
+    //        gasDecimal = gasDecimal.multiply(wei);
+    //        ((WalletInterface) getActivity()).checkGasPrice(gasDecimal.toBigInteger().toString(), WalletSend.this, mCoinType);
+    //     }
+    // }
 
     @Override
     public void onResume() {

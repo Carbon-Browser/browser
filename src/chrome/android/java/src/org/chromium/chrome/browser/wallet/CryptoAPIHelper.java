@@ -31,6 +31,8 @@ public class CryptoAPIHelper {
     private static final String ETHERSCAN_API_KEY = "EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ";
     private static final String BSCSCAN_API_KEY = "UVMB2DE897HHNS5UX5U5X4U438N54F73IG";
 
+    private static final String INFURNA_API_KEY = "ed0c2c977c8b4f69b8d2b11a0b7c05e7";
+
     private static WalletInterface mWalletInterface;
 
     public CryptoAPIHelper(WalletInterface walletInterface) {
@@ -148,6 +150,21 @@ public class CryptoAPIHelper {
             @Override
             protected void onPostExecute(String result) {
                 switch(type) {
+                    case TRX_GAS_ESTIMATE:
+                        if (gasCallback != null) gasCallback.onGasEstimateReceived(result);
+                        break;
+                    case TOKEN_NONCE:
+                        try {
+                            JSONObject jsonResult = new JSONObject(result);
+                            String nonce = jsonResult.getString("result");
+
+                            if (nonce.startsWith("0x")) {
+                                nonce = nonce.substring(2);
+                            }
+
+                            mWalletInterface.onReceivedNonce(tokenSymbol, nonce);
+                        } catch (Exception e) {}
+                        break;
                     case BSC_GAS_CHECK:
                     case ETH_GAS_CHECK:
                         if (gasCallback != null) gasCallback.onCheckGasResult(result);
@@ -162,8 +179,6 @@ public class CryptoAPIHelper {
                             JSONArray resultArray = jsonresult.getJSONArray("result");
                             ArrayList<TransactionObj> mTransactionArray = new ArrayList<TransactionObj>();
 
-                            int highestNonce = 0;
-
                             for (int i = 0; i != resultArray.length(); i++) {
                                 JSONObject trxItem = resultArray.getJSONObject(i);
 
@@ -172,21 +187,20 @@ public class CryptoAPIHelper {
                                 MathContext mc = new MathContext(6);
                                 trxAmount = trxAmount.divide(wei, mc);
 
-                                if (trxItem.getInt("nonce") > highestNonce) highestNonce = trxItem.getInt("nonce");
-
                                 BigDecimal gasPrice = new BigDecimal(trxItem.getString("gasPrice"));
                                 BigDecimal gasUsed = new BigDecimal(trxItem.getString("gasUsed"));
                                 BigDecimal gas = gasUsed.multiply(gasPrice);
                                 gas = gas.divide(wei, mc);
 
-                                TransactionObj trxObj = new TransactionObj(trxItem.getString("timeStamp"), trxAmount.toString(), trxItem.getString("hash"), trxItem.getString("to"), trxItem.getString("from"),
+                                // android.icu.math.BigDecimal does not have toPlainString or any other kind of built in method
+                                java.math.BigDecimal trxAmountAlt = new java.math.BigDecimal(trxAmount.toString());
+
+                                TransactionObj trxObj = new TransactionObj(trxItem.getString("timeStamp"), trxAmountAlt.toPlainString(), trxItem.getString("hash"), trxItem.getString("to"), trxItem.getString("from"),
                                           trxItem.getString("contractAddress"), tokenSymbol, gas.toString());
                                 mTransactionArray.add(trxObj);
                             }
 
                             mWalletInterface.onReceivedTransactions(mTransactionArray);
-
-                            mWalletInterface.onReceivedNonce(tokenSymbol, highestNonce+"");
                         } catch (Exception ignore) {
 
                         }
@@ -329,6 +343,28 @@ public class CryptoAPIHelper {
         sendAPIRequest(url, Web3Enum.BTC_PRICE, "GET", "BTC", null, null);
     }
 
+    public void getTokenNonce(String tokenType, String address, String tokenSymbol) {
+        String baseUrl;
+        String apiKey;
+
+        if (tokenType.equals("BEP20")) {
+            baseUrl = "https://api.bscscan.com/api";
+            apiKey = BSCSCAN_API_KEY;
+        } else {
+            baseUrl = "https://api.etherscan.io/api";
+            apiKey = ETHERSCAN_API_KEY;
+        }
+
+        String url = baseUrl
+                    + "?module=proxy&action=eth_getTransactionCount&address="
+                    + address
+                    + "&tag=latest&apikey="
+                    + apiKey;
+
+        sendAPIRequest(url, Web3Enum.TOKEN_NONCE, "POST", tokenSymbol, null, null);
+    }
+
+
     public void getERCTrx(String address, String contractAddress, String ticker) {
         String url = "https://api.etherscan.io/api?module=account&action=tokentx&contractaddress="
         + contractAddress
@@ -361,11 +397,23 @@ public class CryptoAPIHelper {
         sendAPIRequest(url, (isEth ? Web3Enum.GET_ETH_TRX : Web3Enum.GET_BEP_TRX), "POST", ticker, null, null);
     }
 
+    public void getTokenGasEstimate(String tokenType, String data, String recipient, String amount, ConfigureTrxCallback callback) {
+        String url = (tokenType.equals("BEP20") ? "https://api.bscscan.com/api" : "https://api.etherscan.io/api")
+          + "?module=proxy&action=eth_estimateGas"
+          + "&data=" + data
+          + "&to=" + recipient
+          + "&value=" + amount
+          + "&apikey=" + (tokenType.equals("BEP20") ? BSCSCAN_API_KEY : ETHERSCAN_API_KEY);
+
+        sendAPIRequest(url, Web3Enum.TRX_GAS_ESTIMATE, "POST", "", null, callback);
+    }
+
     public void checkGasPrice(String gas, ConfigureTrxCallback callback, CoinType coinType) {
-        String url = "https://api.etherscan.io/api?module=gastracker&action=gasestimate&gasprice="
+        String url = coinType == CoinType.ETHEREUM ? "https://api.etherscan.io" : "api.bscscan.com"
+        + "/api?module=gastracker&action=gasestimate&gasprice="
         + gas
         + "&apikey="
-        + ETHERSCAN_API_KEY;
+        + (coinType == CoinType.ETHEREUM ? ETHERSCAN_API_KEY : BSCSCAN_API_KEY);
 
         sendAPIRequest(url, Web3Enum.ETH_GAS_CHECK, "POST", "", null, callback);
     }

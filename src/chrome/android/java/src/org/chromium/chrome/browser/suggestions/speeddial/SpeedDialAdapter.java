@@ -165,16 +165,11 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
                 themeColor = typedValue.data;
             } catch (Exception e) {}
 
-            Drawable addDrawable = res.getDrawable(R.drawable.ic_add);
-            addDrawable.setColorFilter(Color.parseColor("#50515B")/*res.getColor((themeColor == -1)
-                    ? android.R.color.black : android.R.color.black)*/, android.graphics.PorterDuff.Mode.SRC_IN);
-
             final float density = res.getDisplayMetrics().density;
             final int valueInDp = (int)(15 * density);
 
             holder.imageView.getLayoutParams().height -= valueInDp;
             holder.imageView.getLayoutParams().width -= valueInDp;
-            holder.imageView.setImageDrawable(addDrawable);
             //FrameLayout.MarginLayoutParams layoutParams = (FrameLayout.MarginLayoutParams)holder.imageView.getLayoutParams();
             //layoutParams.setMargins(0, res.getDimensionPixelSize(R.dimen.speed_dial_icon_margin_top), 0, 0);
             //holder.imageView.setLayoutParams(layoutParams);
@@ -234,6 +229,14 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
                     });
                 }
             });
+
+            try {
+                Drawable addDrawable = res.getDrawable(R.drawable.ic_add);
+                addDrawable.setColorFilter(Color.parseColor("#50515B")/*res.getColor((themeColor == -1)
+                        ? android.R.color.black : android.R.color.black)*/, android.graphics.PorterDuff.Mode.SRC_IN);
+
+                holder.imageView.setImageDrawable(addDrawable);
+            } catch (Exception e) {}
         } else {
             SpeedDialDataItem tile = mItems.get(position);
 

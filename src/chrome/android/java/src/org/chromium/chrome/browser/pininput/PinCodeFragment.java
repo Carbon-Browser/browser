@@ -18,6 +18,10 @@ import org.chromium.chrome.browser.wallet.WalletActivity;
 import org.chromium.chrome.browser.wallet.WalletInterface;
 import org.chromium.ui.widget.Toast;
 
+import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+
 public final class PinCodeFragment extends Fragment implements PinCodeInterface {
 
    public PinCodeFragment() {}
@@ -44,6 +48,8 @@ public final class PinCodeFragment extends Fragment implements PinCodeInterface 
 
      mCode = mCode + code;
      onCodeChanged();
+
+     doVibrate();
    }
 
    @Override
@@ -52,6 +58,23 @@ public final class PinCodeFragment extends Fragment implements PinCodeInterface 
 
      mCode = mCode.substring(0, mCode.length() - 1);
      onCodeChanged();
+
+     doVibrate();
+   }
+
+   private void doVibrate() {
+      try {
+        Vibrator vibrator = (Vibrator) getActivity().getSystemService(Context.VIBRATOR_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // For newer versions
+            VibrationEffect effect = VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE); // 1000 milliseconds = 1 second
+            vibrator.vibrate(effect);
+        } else {
+            // For older versions
+            vibrator.vibrate(100); // 1000 milliseconds = 1 second
+        }
+      } catch ( Exception e ) {}
    }
 
    private void onCodeChanged() {

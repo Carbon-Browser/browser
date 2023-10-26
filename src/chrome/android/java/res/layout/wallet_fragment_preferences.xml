@@ -50,11 +50,17 @@
             tools:ignore="HardcodedText"/>
     </LinearLayout>
 
+    <Space
+        android:layout_width="1dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
     <LinearLayout
         android:id="@+id/logout_button"
         android:background="@drawable/rounded_background_wallet_black"
         android:orientation="horizontal"
         android:padding="20dp"
+        android:layout_marginBottom="45dp"
         android:gravity="center_vertical"
         android:layout_marginTop="20dp"
         android:layout_height="wrap_content"

@@ -140,6 +140,17 @@
             android:textColor="@android:color/white"
             tools:ignore="HardcodedText" />
 
+        <TextView
+            android:id="@+id/gas_auto_button"
+            android:text="AUTO"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:layout_width="wrap_content"
+            android:layout_marginHorizontal="10dp"
+            android:layout_gravity="center_vertical"
+            android:layout_height="wrap_content"
+            tools:ignore="HardcodedText" />
+
         <View
             android:layout_width="22dp"
             android:layout_gravity="center_vertical"

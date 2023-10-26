@@ -49,7 +49,7 @@ public class RemoteHelper {
         if (msSinceUpdate <= 86400000) {
             String json = pref.getString("cached_dapps", null);
 
-            if (json == null) {
+            if (json == null || json.equals("") || json.trim().isEmpty()) {
                 fetchDappsJSON(activity, mInterface);
             } else {
                 mInterface.onDappReceived(json);
@@ -72,7 +72,7 @@ public class RemoteHelper {
               HttpURLConnection conn = null;
               try {
                   conn = (HttpURLConnection) url.openConnection();
-                  conn.setDoOutput(false);
+                  conn.setDoOutput(true);
                   conn.setConnectTimeout(4000);
                   conn.setDoInput(true);
                   conn.setUseCaches(false);
@@ -112,6 +112,8 @@ public class RemoteHelper {
 
                   activity.runOnUiThread(() -> {
                       try {
+                          JSONArray test = new JSONArray(response.toString());
+
                           mInterface.onDappReceived(response.toString());
 
                           // cache the background

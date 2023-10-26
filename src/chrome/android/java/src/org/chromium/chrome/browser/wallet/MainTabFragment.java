@@ -265,13 +265,15 @@ public class MainTabFragment extends Fragment implements WalletDatabaseInterface
 
       expandViewDialog.setContentView(containerView);
 
+      LinearLayout mainContainer = containerView.findViewById(R.id.main_container);
+
       ArrayList<TransactionObj> mTrxArray = ((WalletInterface) getActivity()).getTrxList();
 
       for (int i = 0; i != mTrxArray.size(); i++) {
           final TransactionObj trxObj = mTrxArray.get(i);
 
           View v = LayoutInflater.from(mMainView.getContext()).inflate(R.layout.wallet_transaction_item, null);
-          containerView.addView(v);
+          mainContainer.addView(v);
 
           TextView actionTitleTextView = v.findViewById(R.id.action_title);
           actionTitleTextView.setText(trxObj.isSender ? "Sent" : "Received");
@@ -340,11 +342,13 @@ public class MainTabFragment extends Fragment implements WalletDatabaseInterface
 
         expandViewDialog.setContentView(containerView);
 
+        LinearLayout mainContainer = containerView.findViewById(R.id.main_container);
+
         for (int i = 0; i != mTokenArray.size(); i++) {
             TokenObj tokenObj = mTokenArray.get(i);
 
             View v = LayoutInflater.from(context).inflate(R.layout.wallet_token_item, null);
-            containerView.addView(v);
+            mainContainer.addView(v);
 
             TextView tokenNameTextView = v.findViewById(R.id.token_name);
             tokenNameTextView.setText(tokenObj.name);

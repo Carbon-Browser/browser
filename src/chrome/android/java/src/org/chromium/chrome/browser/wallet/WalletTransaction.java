@@ -45,7 +45,7 @@ import java.util.Locale;
 import 	java.sql.Date;
 
 import java.text.SimpleDateFormat;
-
+import java.math.BigInteger;
 import android.widget.ProgressBar;
 
 public class WalletTransaction extends Fragment implements TransactionCallback {
@@ -87,7 +87,7 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
             JSONObject jsonResult = new JSONObject(result);
 
             // Handle error
-            if (jsonResult.getJSONObject("error") != null) {
+            if (jsonResult.has("error")) {
                 status = 2;
                 JSONObject errorObject = jsonResult.getJSONObject("error");
                 errorTextView.setVisibility(View.VISIBLE);
@@ -96,11 +96,31 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
                 statusTextView.setText("Cancelled");
             } else {
                 // handle success
+
+                // add one to nonce
+                String nonce =  TokenDatabase.getInstance(getActivity()).getTokenNonce(tokenTicker);
+                boolean shouldStoreAsHex = false;
+                BigInteger nonceBigInteger;
+                if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
+                    nonceBigInteger = new BigInteger(nonce);
+                    if (nonceBigInteger.compareTo(BigInteger.valueOf(9)) <= 0) {
+                        shouldStoreAsHex = false;
+                    } else {
+                        shouldStoreAsHex = true;
+                    }
+                } else {
+                    nonceBigInteger = new BigInteger(nonce, 16);
+                    shouldStoreAsHex = true;
+                }
+                nonceBigInteger = nonceBigInteger.add(BigInteger.ONE);
+
+                TokenDatabase. getInstance(getActivity()).setTokenNonce(tokenTicker, shouldStoreAsHex ? nonceBigInteger.toString(16) : nonceBigInteger.toString());
+
                 JSONObject jsonObject = new JSONObject(result);
-                externalUrl = chainType.equals("BEP20") ? "https://etherscan.io/tx/" : "https://bscscan.com/tx/";
+                externalUrl = chainType.equals("ERC20") ? "https://etherscan.io/tx/" : "https://bscscan.com/tx/";
                 externalUrl = externalUrl + jsonObject.getString("result");
             }
-        } catch (Exception e) {}
+        } catch (Exception e) { }
     }
 
     @Override

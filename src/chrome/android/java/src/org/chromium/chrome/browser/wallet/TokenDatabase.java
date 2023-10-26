@@ -17,7 +17,7 @@ class TokenDatabase extends SQLiteOpenHelper {
         add(new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_carbon.png", "Carbon", "0.00", "0", "CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206", "BEP20"));
         // add(new TokenObj(CoinType.BITCOIN, R.drawable.crypto_logo_bitcoin, "Bitcoin", "0.00", "0", "BTC", ""));
         add(new TokenObj(CoinType.SMARTCHAIN, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_binance.png", "Binance Smart Chain", "0.00", "0", "BSC", "BEP20"));
-        add(new TokenObj(CoinType.ETHEREUM, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_ethereum.png", "Ethereum", "0.00", "0", "ETH", ""));
+        add(new TokenObj(CoinType.ETHEREUM, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_ethereum.png", "Ethereum", "0.00", "0", "ETH", "ERC20"));
     }};
 
     // All Static variables
@@ -159,7 +159,7 @@ class TokenDatabase extends SQLiteOpenHelper {
 
             try {
                 // Select All Query
-                String selectQuery = "SELECT * FROM " + TABLE_TRX + " ORDER BY " + KEY_TIMESTAMP + " ASC";
+                String selectQuery = "SELECT * FROM " + TABLE_TRX + " ORDER BY " + KEY_TIMESTAMP + " DESC";
 
                 Cursor cursor = db.rawQuery(selectQuery, null);
 
@@ -195,7 +195,7 @@ class TokenDatabase extends SQLiteOpenHelper {
                         }
                         innerCursor.close();
 
-                        boolean isSender = (bscAddress.equals(senderAddress) || ethAddress.equals(senderAddress));
+                        boolean isSender = (bscAddress.equalsIgnoreCase(senderAddress) || ethAddress.equalsIgnoreCase(senderAddress));
 
                         TransactionObj item = new TransactionObj(timestamp, amount, hash, recipientAddress, senderAddress, contractAddress, tokenSymbol, isSender,
                                 tokenIconUrl, chainType, tokenPriceUsd, gas, coinName);
@@ -386,6 +386,29 @@ class TokenDatabase extends SQLiteOpenHelper {
           db.close();
 
           return nonce;
+      }
+    }
+
+    public String getTokenUSDValue(boolean isEth) {
+      synchronized (sInstance) {
+          SQLiteDatabase db = getReadableDatabase();
+
+          String tokenSymbol = isEth ? "ETH" : "BSC";
+
+          String usdValue = "";
+
+          try {
+              String selectQuery = "SELECT * FROM " + TABLE_CW + " WHERE " + KEY_TOKEN_SYMBOL + "= '" + tokenSymbol + "'";
+              Cursor cursor = db.rawQuery(selectQuery, null);
+              if (cursor.moveToFirst()) {
+                  usdValue = cursor.getString(2);
+              }
+          } catch (Exception e) {
+
+          }
+          db.close();
+
+          return usdValue;
       }
     }
 

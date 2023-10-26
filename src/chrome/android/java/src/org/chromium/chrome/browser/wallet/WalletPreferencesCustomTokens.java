@@ -25,6 +25,10 @@ import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
 import java.util.ArrayList;
 
+import android.view.MenuItem;
+import android.widget.PopupMenu;
+import android.view.Menu;
+
 public class WalletPreferencesCustomTokens extends Fragment {
     public WalletPreferencesCustomTokens() {
         super(R.layout.wallet_fragment_preferences_custom_tokens);
@@ -51,16 +55,16 @@ public class WalletPreferencesCustomTokens extends Fragment {
             if (!tokenObj.isCustomType) continue;
             if (tokenObj.chain != null && tokenObj.chain.equals("0x04756126f044634c9a0f0e985e60c88a51acc206")) continue;
 
-            View v = LayoutInflater.from(view.getContext()).inflate(R.layout.wallet_custom_token_item_row, null);
-            tokenContainer.addView(v);
+            final View tokenRow = LayoutInflater.from(view.getContext()).inflate(R.layout.wallet_custom_token_item_row, null);
+            tokenContainer.addView(tokenRow);
 
-            TextView tokenTicker = v.findViewById(R.id.token_ticker);
+            TextView tokenTicker = tokenRow.findViewById(R.id.token_ticker);
             tokenTicker.setText(tokenObj.name + " (" + tokenObj.ticker + ")");
 
-            TextView tokenNameChain = v.findViewById(R.id.token_name_chain);
+            TextView tokenNameChain = tokenRow.findViewById(R.id.token_name_chain);
             tokenNameChain.setText(tokenObj.chainName);
 
-            ImageView tokenIcon = v.findViewById(R.id.token_icon);
+            ImageView tokenIcon = tokenRow.findViewById(R.id.token_icon);
             Glide.with(tokenIcon)
                 .load(tokenObj.iconUrl)
                 //.thumbnail(0.05f)
@@ -81,11 +85,31 @@ public class WalletPreferencesCustomTokens extends Fragment {
                     }
                 });
 
-            View tokenOptionsButton = v.findViewById(R.id.token_control_button);
+            View tokenOptionsButton = tokenRow.findViewById(R.id.token_control_button);
             tokenOptionsButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    // todo open popup with option to delete
+                    //  open popup with option to delete
+                    PopupMenu popupMenu = new PopupMenu(view.getContext(), tokenOptionsButton);
+
+                    // Programmatically add menu items
+                    popupMenu.getMenu().add(Menu.NONE, Menu.NONE, Menu.NONE, "Remove Item");
+
+                    // Set menu item click listener
+                    popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                        @Override
+                        public boolean onMenuItemClick(MenuItem item) {
+                            //if (item.getItemId() == R.id.remove_item) {
+                                tokenContainer.removeView(tokenRow);
+                                TokenDatabase.getInstance(getActivity()).removeToken(tokenObj.ticker);
+                                return true;
+                            //}
+                            //return false;
+                        }
+                    });
+
+                    // Show the menu
+                    popupMenu.show();
                 }
             });
         }

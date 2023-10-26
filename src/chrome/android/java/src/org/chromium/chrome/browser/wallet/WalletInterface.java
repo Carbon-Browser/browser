@@ -62,4 +62,6 @@ public interface WalletInterface {
   void onNavigateAddCustomToken();
 
   void exitWallet();
+
+  void getTokenGasEstimate(String amount, String tokenType, String recipientAddress, String contractAddress, ConfigureTrxCallback callback);
 }
