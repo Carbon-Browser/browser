@@ -114,7 +114,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
            mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
     }
@@ -124,7 +124,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
            mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(View.GONE);
     }
@@ -134,7 +134,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
            mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(View.VISIBLE);
     }
@@ -412,7 +412,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
             mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (isCarbonButtonDisabled) {
             FrameLayout mCarbonButtonContainer = root.findViewById(R.id.carbon_action_button_container);
             mSettingsButton.setVisibility(View.GONE);

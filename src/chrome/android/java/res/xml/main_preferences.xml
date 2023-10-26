@@ -114,7 +114,7 @@
     <androidx.preference.CheckBoxPreference
         android:key="disable_carbon_button"
         android:order="21"
-        android:defaultValue="false"
+        android:defaultValue="true"
         android:title="@string/use_legacy_toolbar"/>
     <Preference
         android:fragment="org.chromium.components.browser_ui.accessibility.AccessibilitySettings"

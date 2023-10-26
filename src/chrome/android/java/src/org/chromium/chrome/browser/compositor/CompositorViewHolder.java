@@ -1252,7 +1252,7 @@ public class CompositorViewHolder extends FrameLayout
     @Override
     public int getBottomControlsHeightPixels() {
         SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
 
         if (isCarbonButtonDisabled) {
             return getKeyboardBottomInsetForControlsPixels()
