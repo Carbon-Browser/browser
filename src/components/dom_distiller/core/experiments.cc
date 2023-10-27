@@ -15,9 +15,9 @@ DistillerHeuristicsType GetDistillerHeuristicsType() {
   // Get the field trial name first to ensure the experiment is initialized.
   const std::string group_name =
       base::FieldTrialList::FindFullName("ReaderModeUI");
-  const std::string switch_value =
-      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kReaderModeHeuristics);
+  const std::string switch_value = switches::reader_mode_heuristics::kAllArticles;
+      //base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+      //    switches::kReaderModeHeuristics);
   if (switch_value != "") {
     if (switch_value == switches::reader_mode_heuristics::kAdaBoost) {
       return DistillerHeuristicsType::ADABOOST_MODEL;
