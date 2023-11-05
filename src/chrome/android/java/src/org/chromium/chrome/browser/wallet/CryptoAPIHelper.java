@@ -39,7 +39,7 @@ public class CryptoAPIHelper {
         mWalletInterface = walletInterface;
     }
 
-    public void sendAPIRequestBody(String url, final Web3Enum type, String callType, final String tokenSymbol, String body) {
+    public void sendAPIRequestBody(String url, final Web3Enum type, String callType, final String tokenSymbol, String body, TransactionCallback callback) {
         new AsyncTask<String>() {
             @Override
             protected String doInBackground() {
@@ -90,6 +90,9 @@ public class CryptoAPIHelper {
             protected void onPostExecute(String result) {
                 try {
                     switch(type) {
+                        case TRANSACTION:
+                            if (callback != null) callback.onTransactionResult(result);
+                          break;
                         case BEP_PRICE:
                         case ERC_PRICE:
                             JSONArray resultArr = new JSONArray(result);
@@ -304,7 +307,7 @@ public class CryptoAPIHelper {
           + "]"
           + "}";
 
-        sendAPIRequestBody(url, Web3Enum.ERC_PRICE, "POST", tokenSymbol, body);
+        sendAPIRequestBody(url, Web3Enum.ERC_PRICE, "POST", tokenSymbol, body, null);
     }
 
     public void getBEPPrice(String tokenSymbol, String contractAddress) {
@@ -316,7 +319,7 @@ public class CryptoAPIHelper {
           + "]"
           + "}";
 
-        sendAPIRequestBody(url, Web3Enum.BEP_PRICE, "POST", tokenSymbol, body);
+        sendAPIRequestBody(url, Web3Enum.BEP_PRICE, "POST", tokenSymbol, body, null);
     }
 
     public void getBTCBalance(String address) {
@@ -416,5 +419,25 @@ public class CryptoAPIHelper {
         + (coinType == CoinType.ETHEREUM ? ETHERSCAN_API_KEY : BSCSCAN_API_KEY);
 
         sendAPIRequest(url, Web3Enum.ETH_GAS_CHECK, "POST", "", null, callback);
+    }
+
+    public void sendTransaction(String chainType, String hexString, String tokenSymbol, TransactionCallback callback) {
+        String url = "";
+        if (chainType.equals("BEP20")) {
+            url = "https://go.getblock.io/5855ef8cc8c04dfd808817090d98dd7c";
+        } else {
+            url = "https://go.getblock.io/56d1ba70818d40a19f936b8a0bffcece";
+        }
+
+        String body = "{"
+            + "\"jsonrpc\": \"2.0\","
+            + "\"method\": \"eth_sendRawTransaction\","
+            + "\"params\": ["
+            + "\"" + hexString + "\""
+            + "],"
+            + "\"id\": \"getblock.io\""
+            + "}";
+
+        sendAPIRequestBody(url, Web3Enum.TRANSACTION, "POST", tokenSymbol, body, callback);
     }
 }

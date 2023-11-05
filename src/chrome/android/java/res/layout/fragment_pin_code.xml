@@ -72,6 +72,7 @@
                             style="@style/passCodeButton"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="1"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                         <Button
@@ -79,6 +80,7 @@
                             android:onClick="onPassCodeButtonPressed"
                             android:layout_marginStart="24dp"
                             android:text="2"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                         <Button
@@ -86,6 +88,7 @@
                             android:onClick="onPassCodeButtonPressed"
                             android:layout_marginStart="24dp"
                             android:text="3"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
@@ -101,6 +104,7 @@
                             style="@style/passCodeButton"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="4"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText" />
 
                         <Button
@@ -108,6 +112,7 @@
                             android:layout_marginStart="24dp"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="5"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                         <Button
@@ -115,6 +120,7 @@
                             android:layout_marginStart="24dp"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="6"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                 </LinearLayout>
@@ -130,6 +136,7 @@
                             style="@style/passCodeButton"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="7"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                         <Button
@@ -137,6 +144,7 @@
                             android:layout_marginStart="24dp"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="8"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                         <Button
@@ -144,8 +152,8 @@
                             android:layout_marginStart="24dp"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="9"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
-
                 </LinearLayout>
 
                 <LinearLayout
@@ -159,6 +167,7 @@
                             style="@style/passCodeButton"
                             android:onClick="onPassCodeButtonPressed"
                             android:text="0"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                         <Button
@@ -166,6 +175,7 @@
                             android:layout_marginStart="24dp"
                             android:onClick="onDeleteCodePressed"
                             android:text="←"
+                            android:textColor="@android:color/white"
                             tools:ignore="HardcodedText"/>
 
                 </LinearLayout>

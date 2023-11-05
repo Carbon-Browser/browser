@@ -56,6 +56,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import android.graphics.drawable.Drawable;
 
+import android.widget.ProgressBar;
+
 import java.math.RoundingMode;
 
 public class WalletSend extends Fragment implements ZXingScannerView.ResultHandler, ConfigureTrxCallback {
@@ -78,12 +80,19 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
     private static String mAmount;
     private static String mGas;
 
+    private boolean isValid = false;
+
     private boolean didOverrideAmountText = false;
     private boolean didOverrideGasAmount = false;
 
     private boolean isCameraShown = false;
 
     private EditText gasEditText;
+
+    private ProgressBar gasLoader;
+    private boolean isShowingAdvanced = false;
+    private TextView autoGasButton;
+    private Button nextButton;
 
     public WalletSend() {
         super(R.layout.wallet_fragment_send);
@@ -97,7 +106,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             // float estimate = Float.parseFloat(jsonResult.getString("result"));
 
             gasEditText.setText(jsonResult.getString("result"));
-        } catch (Exception ignore) {}
+        } catch (Exception ignore) { }
     }
 
     @Override
@@ -134,6 +143,10 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
 
             String fuel = mChainType.equals("BEP20") ? "BSC" : "ETH";
             mGasTimeEstimate.setText("Max Network Fee: $" + maxFeeDollar.toPlainString() + " / " + maxFeeToken.toPlainString() + " " + fuel);
+
+            isValid = true;
+            gasLoader.setVisibility(View.GONE);
+            nextButton.setText("GO NEXT");
         } catch (Exception ignore) {}
     }
 
@@ -153,6 +166,8 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             mContractAddress = getArguments().getString("COIN_CONTRACT_ADDRESS_KEY", "");
             mChainType = getArguments().getString("COIN_CHAIN_TYPE_KEY", "");
         }
+
+        gasLoader = view.findViewById(R.id.gas_loader);
 
         mScannerView = new ZXingScannerView(view.getContext());
 
@@ -207,13 +222,15 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
         TextView tokenTicker = view.findViewById(R.id.amount_token_name);
         tokenTicker.setText("$"+mCoinTicker);
 
-        Button nextButton = view.findViewById(R.id.button_next);
+        nextButton = view.findViewById(R.id.button_next);
         nextButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if (mRecipientAddress == null || mRecipientAddress.equals("")
-                  || mRecipientAddress == null || mRecipientAddress.equals("")
-                  || mRecipientAddress == null || mRecipientAddress.equals("")) {
+                if (!isValid && !isShowingAdvanced) {
+                  validate();
+                } else if (mRecipientAddress == null || mRecipientAddress.equals("")
+                  || mAmount == null || mAmount.equals("")
+                  || mGas == null || mGas.equals("")) {
                     Toast.makeText(getActivity(), "Please check that all the fields are valid.", Toast.LENGTH_SHORT).show();
                 } else {
                     ((WalletInterface) getActivity()).onNavigateVerifyTrx(mCoinName, mCoinIcon, mCoinIconUrl, mCoinTicker,
@@ -242,6 +259,11 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
                 String text = editable.toString();
 
                 mRecipientAddress = text;
+
+                if (!isShowingAdvanced) {
+                  isValid = false;
+                  nextButton.setText("VERIFY");
+                }
             }
         });
 
@@ -337,6 +359,11 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
                     }
 
                     mAmount = text;
+
+                    if (!isShowingAdvanced) {
+                      isValid = false;
+                      nextButton.setText("VERIFY");
+                    }
                 } catch (Exception ignore) { }
             }
         });
@@ -354,7 +381,23 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             }
         });
 
-        TextView autoGasButton = view.findViewById(R.id.gas_auto_button);
+        final Button advancedOptionsButton = view.findViewById(R.id.advanced_options_button);
+        advancedOptionsButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                isShowingAdvanced = !isShowingAdvanced;
+
+                isValid = false;
+
+                autoGasButton.setVisibility(isShowingAdvanced ? View.VISIBLE : View.GONE);
+
+                gasEditText.setEnabled(isShowingAdvanced);
+
+                nextButton.setText(isShowingAdvanced ? "GO NEXT" : "VERIFY");
+            }
+        });
+
+        autoGasButton = view.findViewById(R.id.gas_auto_button);
         autoGasButton.getPaint().setShader(textShader);
 
         autoGasButton.setOnClickListener(new View.OnClickListener() {
@@ -369,15 +412,12 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
         });
     }
 
-    // private void checkGas() {
-    //     if (mGas != null && !mGas.equals("")) {
-    //        BigDecimal wei = new BigDecimal("1000000000000000000");
-    //
-    //        BigDecimal gasDecimal = new BigDecimal(mGas);
-    //        gasDecimal = gasDecimal.multiply(wei);
-    //        ((WalletInterface) getActivity()).checkGasPrice(gasDecimal.toBigInteger().toString(), WalletSend.this, mCoinType);
-    //     }
-    // }
+    private void validate() {
+        try {
+            gasLoader.setVisibility(View.VISIBLE);
+            ((WalletInterface) getActivity()).getTokenGasEstimate(mAmount, mChainType, mRecipientAddress, mContractAddress, WalletSend.this);
+        } catch (Exception e) {}
+    }
 
     @Override
     public void onResume() {

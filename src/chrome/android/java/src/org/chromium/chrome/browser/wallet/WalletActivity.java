@@ -78,9 +78,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     private TrxObj mPendingTrx;
 
-    public WalletActivity() {
-        fetchLatestPrices();
-    }
+    public WalletActivity() { }
 
     @Override
     public ArrayList<TransactionObj> getTrxList() {
@@ -138,15 +136,40 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
         mCryptoAPIHelper.getEthPrice();
         // mCryptoAPIHelper.getBTCPrice();
         mCryptoAPIHelper.getBNBPrice();
-        mCryptoAPIHelper.getBEPPrice("CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206");
+
+        ArrayList<TokenObj> mTokenArray = getTokenList();
+        try {
+            for (int i = 0; i != mTokenArray.size(); i++) {
+                TokenObj token = mTokenArray.get(i);
+                if (token.isCustomType) {
+                    if (token.chainName.equals("BEP20")) {
+                        mCryptoAPIHelper.getBEPPrice(token.ticker, token.chain);
+                    } else {
+                        mCryptoAPIHelper.getERCPrice(token.ticker, token.chain);
+                    }
+                }
+            }
+        } catch (Exception e) { }
     }
 
     private void fetchBalance() {
         CryptoAPIHelper mCryptoAPIHelper = new CryptoAPIHelper(this);
         mCryptoAPIHelper.getEthBalance(mWallet.getAddressForCoin(CoinType.ETHEREUM));
         mCryptoAPIHelper.getBNBBalance(mWallet.getAddressForCoin(CoinType.SMARTCHAIN)); // BSC uses eth smart contracts
-        // mCryptoAPIHelper.getBTCBalance(mWallet.getAddressForCoin(CoinType.BITCOIN));
-        mCryptoAPIHelper.getBEPBalance("0x04756126f044634c9a0f0e985e60c88a51acc206", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), "CSIX");
+
+        ArrayList<TokenObj> mTokenArray = getTokenList();
+        try {
+            for (int i = 0; i != mTokenArray.size(); i++) {
+                TokenObj token = mTokenArray.get(i);
+                if (token.isCustomType) {
+                    if (token.chainName.equals("BEP20")) {
+                        mCryptoAPIHelper.getBEPBalance(token.chain, mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.ticker);
+                    } else {
+                        mCryptoAPIHelper.getERCBalance(token.chain, mWallet.getAddressForCoin(CoinType.ETHEREUM), token.ticker);
+                    }
+                }
+            }
+        } catch (Exception e) { }
     }
 
     @Override
@@ -300,13 +323,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                     Ethereum.SigningInput signerInput = signerInputBuilder.build();
 
                     Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
-                    if (mPendingTrx.chainType.equals("BEP20")) {
-                        mCryptoAPIHelper.sendAPIRequest("https://api.bscscan.com/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), true) + "&apikey=UVMB2DE897HHNS5UX5U5X4U438N54F73IG",
-                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-                    } else {
-                        mCryptoAPIHelper.sendAPIRequest("https://api.etherscan.io/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), true) + "&apikey=EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ",
-                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-                    }
+                    mCryptoAPIHelper.sendTransaction(mPendingTrx.chainType, toHexString(signerOutput.getEncoded().toByteArray(), true),  mPendingTrx.tokenTicker, callback);
                 } else {
                     // BEP/ERC20
                     signerInputBuilder.setToAddress(mPendingTrx.contractAddress); // contract address
@@ -324,13 +341,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                     Ethereum.SigningInput signerInput = signerInputBuilder.build();
 
                     Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
-                    if (mPendingTrx.chainType.equals("BEP20")) {
-                        mCryptoAPIHelper.sendAPIRequest("https://api.bscscan.com/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), true) + "&apikey=UVMB2DE897HHNS5UX5U5X4U438N54F73IG",
-                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-                    } else {
-                        mCryptoAPIHelper.sendAPIRequest("https://api.etherscan.io/api?module=proxy&action=eth_sendRawTransaction&hex="+ toHexString(signerOutput.getEncoded().toByteArray(), true) + "&apikey=EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ",
-                                Web3Enum.TRANSACTION, "POST", mPendingTrx.tokenTicker, callback, null);
-                    }
+                    mCryptoAPIHelper.sendTransaction(mPendingTrx.chainType, toHexString(signerOutput.getEncoded().toByteArray(), true),  mPendingTrx.tokenTicker, callback);
                 }
             }
         } catch (Exception e) {
@@ -530,7 +541,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
         String externalUrl = "";
         if (trxObj.chainType.equals("BEP20")) {
-            externalUrl = "https://bscscan.io/tx/" + trxObj.hash;
+            externalUrl = "https://bscscan.com/tx/" + trxObj.hash;
         } else {
             externalUrl = "https://etherscan.io/tx/" + trxObj.hash;
         }
@@ -689,10 +700,19 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
     }
 
     @Override
+    public void onReload() {
+        fetchBalance();
+        fetchLatestPrices();
+        getTokenTrx();
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.wallet_activity);
+
+        fetchLatestPrices();
 
         LinearLayout mWalletTabTitleContainer = findViewById(R.id.wallet_tab_title_container);
         mWalletTabTitleContainer.setVisibility(View.GONE);

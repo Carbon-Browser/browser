@@ -63,5 +63,7 @@ public interface WalletInterface {
 
   void exitWallet();
 
+  void onReload();
+
   void getTokenGasEstimate(String amount, String tokenType, String recipientAddress, String contractAddress, ConfigureTrxCallback callback);
 }

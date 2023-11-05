@@ -35,6 +35,12 @@ import android.graphics.drawable.ColorDrawable;
 import java.lang.Integer;
 import wallet.core.jni.CoinType;
 
+import android.widget.ProgressBar;
+import android.os.Handler;
+import org.chromium.chrome.browser.pininput.data.EncryptSharedPreferences;
+import android.content.SharedPreferences;
+import android.widget.ScrollView;
+
 public class MainTabFragment extends Fragment implements WalletDatabaseInterface {
     public MainTabFragment() {
         super(R.layout.wallet_fragment_main);
@@ -51,6 +57,55 @@ public class MainTabFragment extends Fragment implements WalletDatabaseInterface
 
         density = view.getContext().getResources().getDisplayMetrics().density;
         valueInDp = (int)(20 * density);
+
+        View walletReloadButton = view.findViewById(R.id.wallet_reload);
+        final ProgressBar progressBar = view.findViewById(R.id.loading_progress);
+        final ScrollView scrollView = view.findViewById(R.id.main_scrollview);
+        walletReloadButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+              final SharedPreferences mSharedPreferences = new EncryptSharedPreferences(getActivity()).getSharedPreferences();
+
+              // Get the current system time
+              long currentTime = System.currentTimeMillis();
+
+              // Retrieve the last reload time from SharedPreferences
+              long lastReloadTime = mSharedPreferences.getLong("RELOAD_TIME_KEY", 0);
+
+              // Calculate the difference in minutes
+              long differenceInMinutes = (currentTime - lastReloadTime) / (60 * 1000);
+
+              // Check if the difference is greater than or equal to 3 minutes
+              if (differenceInMinutes >= 0.35) {
+                  // It's been at least 3 minutes since the last reload, proceed with the reload
+                  mSharedPreferences.edit().putLong("RELOAD_TIME_KEY", currentTime).apply(); // Store the current time as the last reload time
+
+                  progressBar.setVisibility(View.VISIBLE); // Show the progress bar#
+
+                  ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) scrollView.getLayoutParams();
+                  params.topMargin = 0;
+                  scrollView.setLayoutParams(params);
+
+                  ((WalletInterface) getActivity()).onReload();
+
+                  // Create a Handler to run code in the future
+                  new Handler().postDelayed(new Runnable() {
+                      @Override
+                      public void run() {
+                          progressBar.setVisibility(View.GONE); // Hide the progress bar after 4 seconds
+
+                          // Reset the top margin of the scrollView to 5dp after the delay
+                          int topMarginInDp = 5;
+                          final float scale = getContext().getResources().getDisplayMetrics().density;
+                          int topMarginInPx = (int) (topMarginInDp * scale + 0.5f);
+                          ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) scrollView.getLayoutParams();
+                          params.topMargin = topMarginInPx;
+                          scrollView.setLayoutParams(params);
+                      }
+                  }, 5000); // 4000 milliseconds delay
+              }
+            }
+        });
 
         TextView mBalanceTextView = view.findViewById(R.id.balance_textview);
         Shader textShader = new LinearGradient(0, 0, 80, 0,

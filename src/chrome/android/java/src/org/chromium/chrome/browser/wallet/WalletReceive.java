@@ -49,7 +49,7 @@ public class WalletReceive extends Fragment {
 
         ImageView qrCodeView = view.findViewById(R.id.qr_code_view);
 
-        final String warningText = "Send only " + mCoinName.toLowerCase() + " to this address. Sending any other token may result in permanent loss.";
+        final String warningText = "Send only " + mCoinName.toUpperCase() + " to this address. Sending any other token may result in permanent loss.";
         TextView mWarningTextView = view.findViewById(R.id.scam_warning_message);
         mWarningTextView.setText(warningText);
 
@@ -95,8 +95,6 @@ public class WalletReceive extends Fragment {
             }
             qrCodeView.setImageBitmap(bmp);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { }
     }
 }
