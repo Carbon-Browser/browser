@@ -865,7 +865,7 @@ def _PackageApk(options, build):
                             options.dependencies_res_zips)
 
   exit_code = link_proc.wait()
-  assert exit_code == 0, f'aapt2 link cmd failed with {exit_code=}'
+  assert exit_code == 0, f'aapt2 link cmd failed with {exit_code}'
   logging.debug('Finished: aapt2 link')
 
   if options.shared_resources:

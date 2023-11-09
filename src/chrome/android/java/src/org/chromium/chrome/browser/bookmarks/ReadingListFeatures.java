@@ -69,7 +69,7 @@ public class ReadingListFeatures {
     public static boolean isReadingListMenuItemAsDedicatedRowEnabled() {
         return isReadingListEnabled()
                 && ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                        ChromeFeatureList.READ_LATER, "reading_list_in_app_menu", false);
+                        ChromeFeatureList.READ_LATER, "reading_list_in_app_menu", true);
     }
 
     public static boolean shouldAllowBookmarkTypeSwapping() {

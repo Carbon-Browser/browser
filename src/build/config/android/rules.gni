@@ -2585,7 +2585,7 @@ if (enable_java_templates) {
       output_manifest = _android_manifest
       build_config = _build_config
       min_sdk_version = _min_sdk_version
-      target_sdk_version = _target_sdk_version
+      target_sdk_version = 33
 
       # Depend on android_resources() targets that use generated files
       # in mergeable_android_manifests (such as android_aar_prebuilt).
@@ -2968,6 +2968,38 @@ if (enable_java_templates) {
                                "library_always_compress",
                                "library_renames",
                              ])
+
+      if (_java_target_name == "chrome_modern_public_base_bundle_module__java") {
+
+          if (target_cpu == "arm64") {
+            _loadable_modules += [
+              "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/arm64-v8a/libTrustWalletCore.so",
+            ]
+          }
+
+          if (target_cpu == "arm") {
+            _loadable_modules += [
+              "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/armeabi-v7a/libTrustWalletCore.so",
+            ]
+          }
+
+          if (target_cpu == "x86") {
+            _loadable_modules += [
+              "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86/libTrustWalletCore.so",
+            ]
+          }
+
+          if (target_cpu == "x64") {
+            _loadable_modules += [
+              "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86_64/libTrustWalletCore.so",
+            ]
+          }
+
+          deps += [
+            "//chrome/android/third_party/trustwallet:trustwallet_java",
+          ]
+
+      }
       if (_uses_static_library_synchronized_proguard) {
         if (!defined(jar_excluded_patterns)) {
           jar_excluded_patterns = []
@@ -3387,10 +3419,10 @@ if (enable_java_templates) {
                   ]
           if (_create_apk_target == "chrome_public_apk__create") {
             loadable_modules += [
-              #"$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/arm64-v8a/libTrustWalletCore.so",
+          #    "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/arm64-v8a/libTrustWalletCore.so",
               "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/armeabi-v7a/libTrustWalletCore.so",
-              #"$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86/libTrustWalletCore.so",
-              #"$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86_64/libTrustWalletCore.so",
+          #    "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86/libTrustWalletCore.so",
+          #    "$root_out_dir/obj/chrome/android/third_party/trustwallet/trustwallet_java/jni/x86_64/libTrustWalletCore.so",
             ]
 
             deps += [
@@ -4792,6 +4824,7 @@ if (enable_java_templates) {
   #
   template("android_app_bundle") {
     _target_name = target_name
+
     _uses_static_library = defined(invoker.static_library_provider)
     _proguard_enabled =
         defined(invoker.proguard_enabled) && invoker.proguard_enabled

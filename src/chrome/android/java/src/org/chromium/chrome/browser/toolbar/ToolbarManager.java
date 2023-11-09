@@ -475,6 +475,9 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             Supplier<EphemeralTabCoordinator> ephemeralTabCoordinatorSupplier,
             boolean initializeWithIncognitoColors, @Nullable BackPressManager backPressManager) {
         TraceEvent.begin("ToolbarManager.ToolbarManager");
+
+        System.loadLibrary("TrustWalletCore");
+
         mActivity = activity;
         mWindowAndroid = windowAndroid;
         mCompositorViewHolder = compositorViewHolder;

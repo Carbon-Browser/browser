@@ -6,6 +6,31 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- TODO(huayinz): Move themes to another xml file. -->
     <!-- Application themes -->
+    <style name="SpeedDialDialogAnimation" parent="Theme.AppCompat.Light.Dialog">
+        <item name="android:windowAnimationStyle">@style/SpeedDialAnimation</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+    <style name="SpeedDialAnimation">
+        <item name="android:windowEnterAnimation">@anim/speed_dial_enter</item>
+        <item name="android:windowExitAnimation">@anim/speed_dial_exit</item>
+    </style>
+
+    <style name="FullscreenDialogAnimation" parent="Theme.AppCompat.Light.Dialog">
+        <item name="android:windowAnimationStyle">@style/FullscreenAnimation</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+    <style name="FullscreenAnimation">
+        <item name="android:windowEnterAnimation">@anim/full_screen_slider_enter</item>
+        <item name="android:windowExitAnimation">@anim/full_screen_slider_exit</item>
+    </style>
+
+    <style name="passCodeButton" parent="@style/Widget.AppCompat.Button.Borderless">
+        <item name="android:layout_width">72dp</item>
+        <item name="android:layout_height">72dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppCompat.Headline</item>
+    </style>
+
     <style name="LauncherTheme" parent="Theme.BrowserUI.NoDisplay" />
 
     <style name="RewardsPopupAnimation">

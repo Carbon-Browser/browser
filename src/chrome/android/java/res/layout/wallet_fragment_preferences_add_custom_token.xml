@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:animateLayoutChanges="true"
+    android:background="#1E1E1E">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_marginBottom="30dp"
+        android:layout_height="24dp">
+
+        <TextView
+            android:id="@+id/wallet_tab_title"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:textColor="@android:color/white"
+            android:textAllCaps="true"
+            android:textStyle="bold"
+            android:layout_gravity="center"
+            android:text="ADD NEW TOKEN"
+            tools:ignore="HardcodedText" />
+    </FrameLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#808080"
+        android:textStyle="bold"
+        android:layout_marginBottom="10dp"
+        android:text="DETAILS:"
+        tools:ignore="HardcodedText" />
+
+    <FrameLayout
+        android:id="@+id/token_network_button"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:paddingHorizontal="18dp"
+        android:background="@drawable/rounded_background_wallet_black">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Token Network"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:layout_gravity="center_vertical|start"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:id="@+id/token_network_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:textColor="#808080"
+            android:textStyle="bold"
+            android:text="BEP20"
+            android:layout_marginEnd="40dp"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:textColor="#808080"
+            android:textStyle="bold"
+            android:text="〉"
+            tools:ignore="HardcodedText" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="15dp"
+        android:padding="18dp"
+        android:background="@drawable/rounded_background_wallet_black">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@android:color/white"
+                android:text="Address"
+                android:layout_marginEnd="20dp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText" />
+
+            <EditText
+                android:id="@+id/token_address_edittext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="#ff6a07"
+                android:textStyle="bold"
+                android:gravity="end"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
+                android:textColorHint="@android:color/white" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#373737"
+            android:layout_marginHorizontal="20dp"
+            android:layout_marginVertical="14dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@android:color/white"
+                android:text="Token Name"
+                android:layout_marginEnd="20dp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText" />
+
+            <EditText
+                android:id="@+id/token_name_edittext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="#ff6a07"
+                android:textStyle="bold"
+                android:gravity="end"
+                android:textSize="16sp"
+                android:textColor="@android:color/white"
+                android:textColorHint="@android:color/white" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#373737"
+            android:layout_marginHorizontal="20dp"
+            android:layout_marginVertical="14dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@android:color/white"
+                android:text="Token Symbol"
+                android:layout_marginEnd="20dp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText" />
+
+            <EditText
+                android:id="@+id/token_symbol_edittext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textStyle="bold"
+                android:gravity="end"
+                android:textSize="16sp"
+                android:backgroundTint="#ff6a07"
+                android:textColor="@android:color/white"
+                android:textColorHint="@android:color/white" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <Button
+        android:text="Verify"
+        android:id="@+id/continue_button"
+        android:layout_marginTop="20dp"
+        android:textColor="@android:color/white"
+        android:layout_width="match_parent"
+        android:background="@drawable/rounded_background_wallet_send_button"
+        android:layout_height="50dp"
+        tools:ignore="HardcodedText" />
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="15dp"
+        android:paddingHorizontal="100dp"
+        android:indeterminateTint="#ff5a07"
+        android:visibility="gone"/>
+</LinearLayout>

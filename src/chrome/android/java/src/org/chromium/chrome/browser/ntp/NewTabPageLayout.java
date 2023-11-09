@@ -111,16 +111,34 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.app.role.RoleManager;
+import android.content.Intent;
+import org.chromium.base.IntentUtils;
+import org.chromium.chrome.browser.wallet.WalletActivity;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.chromium.chrome.browser.suggestions.speeddial.helper.RemoteHelper;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import android.view.View;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import org.chromium.base.ContextUtils;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import android.util.DisplayMetrics;
+import android.widget.RelativeLayout;
+
 /**
  * Layout for the new tab page. This positions the page elements in the correct vertical positions.
  * There are no separate phone and tablet UIs; this layout adapts based on the available space.
  */
-public class NewTabPageLayout extends LinearLayout implements VrModeObserver, BackgroundController.NTPBackgroundInterface, RemoteHelper.SpeedDialInterface {
+public class NewTabPageLayout extends LinearLayout implements VrModeObserver, BackgroundController.NTPBackgroundInterface, RemoteHelper.SpeedDialInterface, RemoteHelper.TakeoverInterface {
     private static final String TAG = "NewTabPageLayout";
 
     // Used to signify the cached resource value is unset.
@@ -273,7 +291,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mMainLayoutTopSection = findViewById(R.id.mainLayoutTopSection);
         bgImageView = findViewById(R.id.bg_image_view);
         if (remoteDappsHelper == null) remoteDappsHelper = new RemoteHelper();
-        remoteDappsHelper.getDapps((ChromeActivity)getContext(), this);
+        remoteDappsHelper.getDapps((ChromeActivity)getContext(), ((RemoteHelper.SpeedDialInterface)this));
+        remoteDappsHelper.getTakeover((ChromeActivity)getContext(), ((RemoteHelper.TakeoverInterface)this));
         if (bgController == null) bgController = new BackgroundController();
         bgController.getBackground((ChromeActivity)getContext(), this);
         final TextView adsBlockedTextView = (TextView)findViewById(R.id.ntp_ads_blocked);
@@ -334,7 +353,8 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             mSpeedDialView.updateTileTextTint();
         }
         if(mSpeedDialView.getParent() != null) ((ViewGroup)mSpeedDialView.getParent()).removeView(mSpeedDialView);
-        mMainLayout.addView(mSpeedDialView, 2);
+        mSpeedDialView.setId(R.id.ntp_speed_dial_view);
+        mMainLayout.addView(mSpeedDialView, mMainLayout.findViewById(R.id.cta_view) == null ? 2 : 3);
         mNewsRecyclerView = findViewById(R.id.ntp_news_recyclerview);
         SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
         boolean isNewsEnabled = mPrefs.getBoolean("ntp_news_toggle", true);
@@ -357,7 +377,7 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mNewsTitle.setTextColor(Color.parseColor(textColor));
 
         String backgroundColor = isDarkMode ? "#262626" : "#ffffff";
-        if (!isDarkMode) {
+        if (!isDarkMode && mMainLayout.findViewById(R.id.cta_view) == null) {
             LinearLayout mEarnedLinearLayout = findViewById(R.id.earned_linearlayout);
             LinearLayout mSavedLinearLayout = findViewById(R.id.savings_linearlayout);
             LinearLayout mComingSoonLinearLayout = findViewById(R.id.coming_soon_linearlayout);
@@ -435,22 +455,29 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     private void initialiseWeb3Features() {
         String textColor = isDarkMode ? "#ffffff" : "#000000";
 
-        TextView mComingSoonTitle = findViewById(R.id.coming_soon_textview);
-        mComingSoonTitle.setTextColor(Color.parseColor(textColor));
+        // TextView mComingSoonTitle = findViewById(R.id.coming_soon_textview);
+        // mComingSoonTitle.setTextColor(Color.parseColor(textColor));
 
         TextView mFeaturedDappsTitle = findViewById(R.id.featured_daps_textview);
         mFeaturedDappsTitle.setTextColor(Color.parseColor(textColor));
 
         // Coming soon
-        View comingSoonTile1 = findViewById(R.id.coming_soon_tile1);
+        View walletTile = findViewById(R.id.coming_soon_tile1);
         View stakingTile = findViewById(R.id.coming_soon_tile2);
         View comingSoonTile3 = findViewById(R.id.coming_soon_tile3);
         View comingSoonTile4 = findViewById(R.id.coming_soon_tile4);
 
-        comingSoonTile1.setOnClickListener(new View.OnClickListener() {
+        walletTile.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // loadUrl("https://carbon.website/csix/");
+                Intent intent = new Intent();
+                intent.setClass(view.getContext(), WalletActivity.class);
+
+                try {
+                    ((ChromeActivity)getContext()).startActivityForResult(intent, 12345);
+                } catch (Exception ignore) {}
+
+                // IntentUtils.safeStartActivity(view.getContext(), intent);
             }
         });
 
@@ -464,18 +491,18 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         comingSoonTile3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // loadUrl("https://carbon.website/csix/");
+                loadUrl("https://www.ldx.fi/");
             }
         });
 
         comingSoonTile4.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                // loadUrl("https://carbon.website/csix/");
+                loadUrl("https://www.ldx.fi/");
             }
         });
 
-        TextView mWalletTextView = comingSoonTile1.findViewById(R.id.speed_dial_tile_textview);
+        TextView mWalletTextView = walletTile.findViewById(R.id.speed_dial_tile_textview);
         TextView mStakingTextView = stakingTile.findViewById(R.id.speed_dial_tile_textview);
         TextView mSwapTextView = comingSoonTile3.findViewById(R.id.speed_dial_tile_textview);
         TextView mBridgeTextView = comingSoonTile4.findViewById(R.id.speed_dial_tile_textview);
@@ -488,26 +515,26 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         mSwapTextView.setTextColor(Color.parseColor(textColor));
         mBridgeTextView.setTextColor(Color.parseColor(textColor));
 
-        FrameLayout comingSoonTile1Background = comingSoonTile1.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout walletBackground = walletTile.findViewById(R.id.speed_dial_tile_view_icon_background);
         FrameLayout stakingTileBackground = stakingTile.findViewById(R.id.speed_dial_tile_view_icon_background);
-        FrameLayout comingSoonTile3Background = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon_background);
-        FrameLayout comingSoonTile4Background = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout swapBackground = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon_background);
+        FrameLayout bridgeBackground = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon_background);
 
-        comingSoonTile1Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        walletBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
         stakingTileBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
-        comingSoonTile3Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
-        comingSoonTile4Background.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        swapBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
+        bridgeBackground.setBackground(getResources().getDrawable(R.drawable.speed_dial_icon_background_dark_round));
 
-        ImageView comingSoonTile1Image = comingSoonTile1.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView walletTileImage = walletTile.findViewById(R.id.speed_dial_tile_view_icon);
         ImageView stakingTileImage = stakingTile.findViewById(R.id.speed_dial_tile_view_icon);
-        ImageView comingSoonTile3Image = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon);
-        ImageView comingSoonTile4Image = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView swapTileImage = comingSoonTile3.findViewById(R.id.speed_dial_tile_view_icon);
+        ImageView bridgeTileImage = comingSoonTile4.findViewById(R.id.speed_dial_tile_view_icon);
 
 
-        comingSoonTile1Image.setBackground(getResources().getDrawable(R.drawable.ic_wallet));
+        walletTileImage.setBackground(getResources().getDrawable(R.drawable.ic_wallet));
         stakingTileImage.setBackground(getResources().getDrawable(R.drawable.ic_staking));
-        comingSoonTile3Image.setBackground(getResources().getDrawable(R.drawable.ic_swap));
-        comingSoonTile4Image.setBackground(getResources().getDrawable(R.drawable.ic_bridge));
+        swapTileImage.setBackground(getResources().getDrawable(R.drawable.ic_swap));
+        bridgeTileImage.setBackground(getResources().getDrawable(R.drawable.ic_bridge));
     }
 
     private void loadUrl(String url) {
@@ -1138,6 +1165,83 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     }
 
     @Override
+    public void onTakeoverReceived(String json) {
+        try {
+            if (bgController == null) bgController = new BackgroundController();
+
+            LinearLayout mEarnedLinearLayout = findViewById(R.id.earned_linearlayout);
+            LinearLayout mSavedLinearLayout = findViewById(R.id.savings_linearlayout);
+            LinearLayout mComingSoonLinearLayout = findViewById(R.id.coming_soon_linearlayout);
+            LinearLayout mDappsLinearLayout = findViewById(R.id.featured_dapps_linearlayout);
+
+            int backgroundDrawable = R.drawable.ntp_rounded_background_translucent;
+            if (!isDarkMode) {
+                backgroundDrawable = R.drawable.ntp_rounded_dark_background_translucent;
+            }
+
+            mEarnedLinearLayout.setBackground(getResources().getDrawable(backgroundDrawable));
+            mSavedLinearLayout.setBackground(getResources().getDrawable(backgroundDrawable));
+            mComingSoonLinearLayout.setBackground(getResources().getDrawable(backgroundDrawable));
+            mDappsLinearLayout.setBackground(getResources().getDrawable(backgroundDrawable));
+
+            DisplayMetrics displayMetrics = mContext.getResources().getDisplayMetrics();
+            int screenHeight = displayMetrics.heightPixels;
+            int screenWidth = displayMetrics.widthPixels;
+
+            RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(screenWidth, screenHeight);
+            bgImageView.setLayoutParams(lp);
+
+            JSONObject jsonObject = new JSONObject(json);
+            bgController.setBackground(bgImageView, jsonObject.getString("background_url"));
+
+            View fade = findViewById(R.id.bg_image_fade);
+            fade.setVisibility(View.VISIBLE);
+            fade.setBackground(isDarkMode ? getResources().getDrawable(R.drawable.fade_bottom_gradient_dark) : getResources().getDrawable(R.drawable.fade_bottom_gradient_light));
+
+            ImageView ctaView = new ImageView(mContext); // Make sure to pass a valid Context here
+            ctaView.setId(R.id.cta_view);
+            // Setting the layout parameters to match parent width, wrap content height
+            LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, // Width
+                    LinearLayout.LayoutParams.WRAP_CONTENT  // Height
+            );
+            ctaView.setLayoutParams(layoutParams);
+
+            // Setting scale type to center
+            ctaView.setScaleType(ImageView.ScaleType.CENTER);
+
+            // Add ctaView to your layout if not already added
+            // Assuming you have a layout named 'parentLayout' where you want to add ctaView
+            mMainLayout.addView(ctaView, 2);
+
+            Glide.with(ctaView)
+                .load(jsonObject.getString("cta_image"))
+                .thumbnail(0.1f)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .into(new CustomTarget<Drawable>() {
+                    @Override
+                    public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                        ctaView.setImageDrawable(resource);
+                    }
+
+                    @Override
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                    }
+                });
+
+            ctaView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                   try {
+                       loadUrl(jsonObject.getString("cta_url"));
+                   } catch (Exception e) {}
+                }
+            });
+        } catch (Exception e) { }
+    }
+
+    @Override
     public void onDappReceived(String json) {
         String textColor = isDarkMode ? "#ffffff" : "#000000";
 
@@ -1152,7 +1256,6 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
            View featuredDappTile6 = findViewById(R.id.featured_daps6);
            View featuredDappTile7 = findViewById(R.id.featured_daps7);
            View featuredDappTile8 = findViewById(R.id.featured_daps8);
-
 
            TextView mTextView1 = featuredDappTile1.findViewById(R.id.speed_dial_tile_textview);
            TextView mTextView2 = featuredDappTile2.findViewById(R.id.speed_dial_tile_textview);

@@ -1,0 +1,8 @@
+import("//build/config/android/rules.gni")
+import("//build/config/android/rules.gni")
+
+java_prebuilt("jdk15on_java") {
+  jar_path = "bcprov-jdk15on-1.69.jar"
+  supports_android = true
+  enable_bytecode_checks = false
+}

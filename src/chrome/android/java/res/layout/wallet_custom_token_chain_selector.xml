@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingVertical="20dp"
+    android:orientation="vertical"
+    android:background="@drawable/rounded_background_wallet_black">
+
+    <FrameLayout
+        android:id="@+id/ethereum_button"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:layout_marginBottom="10dp"
+        android:paddingHorizontal="18dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ERC20"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:layout_gravity="center_vertical|start"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:textColor="#808080"
+            android:textStyle="bold"
+            android:text="Ethereum"
+            android:layout_marginEnd="40dp"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:textColor="#808080"
+            android:textStyle="bold"
+            android:text="〉"
+            tools:ignore="HardcodedText" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/smartchain_button"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:paddingHorizontal="18dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="BEP20"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:layout_gravity="center_vertical|start"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:textColor="#808080"
+            android:textStyle="bold"
+            android:text="Binance Smart Chain"
+            android:layout_marginEnd="40dp"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:textColor="#808080"
+            android:textStyle="bold"
+            android:text="〉"
+            tools:ignore="HardcodedText" />
+    </FrameLayout>
+
+</LinearLayout>

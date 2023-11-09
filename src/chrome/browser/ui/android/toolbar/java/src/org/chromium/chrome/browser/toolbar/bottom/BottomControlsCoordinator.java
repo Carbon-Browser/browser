@@ -61,6 +61,11 @@ import org.chromium.base.ContextUtils;
 import android.widget.FrameLayout;
 import android.widget.Space;
 
+import android.content.Intent;
+import org.chromium.base.IntentUtils;
+
+import android.content.ComponentName;
+
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
  * bottom UI that re-sizes the web contents, scrolls off-screen, and hides when the keyboard is
@@ -111,7 +116,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
            mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
     }
@@ -121,7 +126,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
            mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(View.GONE);
     }
@@ -131,7 +136,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
            mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (mCarbonActionButton == null || isCarbonButtonDisabled) return;
         mCarbonActionButton.setVisibility(View.VISIBLE);
     }
@@ -263,9 +268,13 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
               menu.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
             	menu.addItem(mWalletItem, "", new View.OnClickListener() {
               		@Override
-              		public void onClick(View v) {
-                    Toast.makeText(v.getContext(), "Coming soon!", Toast.LENGTH_SHORT).show();
-                    menu.menuOnclickMethod();
+              		public void onClick(View view) {
+                    Intent intent = new Intent();
+                    intent.setComponent(new ComponentName("com.browser.tssomas", "org.chromium.chrome.browser.wallet.WalletActivity"));
+
+                    try {
+                        activity.startActivityForResult(intent, 12345);
+                    } catch (Exception ignore) { }
                     new Handler().postDelayed(new Runnable() {
                         @Override
                         public void run() {
@@ -298,7 +307,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             	menu.addItem(mSwapsItem, "", new View.OnClickListener() {
               		@Override
               		public void onClick(View v) {
-                     Toast.makeText(v.getContext(), "Coming soon!", Toast.LENGTH_SHORT).show();
+                     BottomToolbarCoordinator.loadUrl("https://www.ldx.fi/", v);
                      menu.menuOnclickMethod();
                      new Handler().postDelayed(new Runnable() {
                          @Override
@@ -396,7 +405,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
                     // SHOWING BROWSING
                     setBottomToolbarVisible(true);
                 }
-            }  
+            }
 
             @Override
             public void onStartedHiding(
@@ -406,7 +415,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         if (mPrefs == null) {
             mPrefs = ContextUtils.getAppSharedPreferences();
         }
-        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", false);
+        boolean isCarbonButtonDisabled = mPrefs.getBoolean("disable_carbon_button", true);
         if (isCarbonButtonDisabled) {
             FrameLayout mCarbonButtonContainer = root.findViewById(R.id.carbon_action_button_container);
             mSettingsButton.setVisibility(View.GONE);

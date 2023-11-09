@@ -51,7 +51,7 @@ public class AboutChromeSettings
         SettingsUtils.addPreferencesFromResource(this, R.xml.about_chrome_preferences);
 
         Preference p = findPreference(PREF_APPLICATION_VERSION);
-        p.setSummary("v6.9.6");
+        p.setSummary("v6.9.9.2");
         p.setOnPreferenceClickListener(this);
         p = findPreference(PREF_OS_VERSION);
         p.setSummary(AboutSettingsBridge.getOSVersion());

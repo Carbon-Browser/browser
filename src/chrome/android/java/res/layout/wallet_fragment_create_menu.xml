@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:background="#1E1E1E">
+
+    <ImageView
+        android:layout_width="330dp"
+        android:layout_height="330dp"
+        android:src="@drawable/logo_carbon_wallet"
+        android:fadingEdgeLength="40dp"
+        android:fadingEdge="horizontal|vertical"
+        android:scaleType="centerCrop" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center|top">
+
+        <ImageView
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@mipmap/app_icon"/>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="60dp"
+            android:layout_marginStart="18dp"
+            android:orientation="vertical"
+            android:layout_gravity="top"
+            android:gravity="start|center_vertical">
+
+            <ImageView
+                android:layout_width="140dp"
+                android:layout_height="38dp"
+                android:scaleType="fitStart"
+                android:src="@drawable/ic_text_carbon"/>
+
+            <ImageView
+                android:layout_width="79dp"
+                android:layout_height="22dp"
+                android:scaleType="fitStart"
+                android:src="@drawable/ic_carbon_wallet_text"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <Space
+        android:layout_width="1dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="70dp"
+        android:layout_marginStart="15dp"
+        android:layout_marginEnd="15dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/button_create_wallet"
+            android:textColor="@android:color/white"
+            android:textAllCaps="true"
+            android:background="@drawable/rounded_background_wallet_black"
+            android:layout_weight="1"
+            android:layout_width="match_parent"
+            android:text="Create Wallet"
+            android:layout_height="50dp"
+            tools:ignore="HardcodedText"/>
+
+        <Button
+            android:id="@+id/button_import_wallet"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/rounded_background_wallet_send_button"
+            android:textColor="@android:color/white"
+            android:layout_weight="1"
+            android:textAllCaps="true"
+            android:layout_width="match_parent"
+            android:text="i have a wallet"
+            android:layout_height="50dp"
+            tools:ignore="HardcodedText"/>
+
+    </LinearLayout>
+
+</LinearLayout>

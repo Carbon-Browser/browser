@@ -44,6 +44,11 @@ public class RewardsAPIBridge {
         void showRatingPopup();
     }
 
+    private static final String API_BASE_URL = "https://sf-api-gateway-prod.hydrisapps.co.uk/api";
+    private static final String API_ACCESS_KEY = "ZGtaV2VXaz1ZV1E0WWpCaU1qVXRZamN3T1MwME9EbGlMVGhoWVRBdFltTm1NRE5tTVRnM01XUTNhbkl4U2tNPQ==";
+    // private static final String API_BASE_URL = "https://sf-api-gateway-dev.hydrisapps.co.uk/api";
+    // private static final String API_ACCESS_KEY = "VlVoUmJHOD1aalpoTm1SaU1tSXROVFZtTXkwME9UQmhMV0prWkdZdFlqSTVaVFl3TXpkbFpqSTVRVmxaWm1zPQ==";
+
     private static RewardsAPIBridge sRewardsAPIBridge;
 
     private SharedPreferences mPrefs;

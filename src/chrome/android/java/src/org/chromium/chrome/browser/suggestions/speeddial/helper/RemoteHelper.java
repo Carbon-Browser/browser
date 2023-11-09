@@ -36,6 +36,10 @@ public class RemoteHelper {
         void onDappReceived(String json);
     }
 
+    public interface TakeoverInterface {
+        void onTakeoverReceived(String json);
+    }
+
     public RemoteHelper() {
     }
 
@@ -49,7 +53,7 @@ public class RemoteHelper {
         if (msSinceUpdate <= 86400000) {
             String json = pref.getString("cached_dapps", null);
 
-            if (json == null) {
+            if (json == null || json.equals("") || json.trim().isEmpty()) {
                 fetchDappsJSON(activity, mInterface);
             } else {
                 mInterface.onDappReceived(json);
@@ -58,6 +62,102 @@ public class RemoteHelper {
             fetchDappsJSON(activity, mInterface);
         }
     }
+
+    public void getTakeover(ChromeActivity activity, TakeoverInterface mInterface) {
+        SharedPreferences pref = ContextUtils.getAppSharedPreferences();
+        int msSinceUpdate = Long.valueOf(System.currentTimeMillis()).intValue() - pref.getInt("takeover_last_update", 0);
+
+        // boolean shouldCache = pref.getBoolean("should_cache_dapps", true);
+
+        // cache, refresh after 1 day
+        if (msSinceUpdate <= 86400000) {
+            String json = pref.getString("cached_takeover", null);
+
+            if (json == null || json.equals("") || json.trim().isEmpty()) {
+                fetchTakeoverJSON(activity, mInterface);
+            } else {
+                mInterface.onTakeoverReceived(json);
+            }
+        } else {
+            fetchTakeoverJSON(activity, mInterface);
+        }
+    }
+
+    public void fetchTakeoverJSON(final ChromeActivity activity, final TakeoverInterface mInterface) {
+        new Thread(() -> {
+            URL url;
+            StringBuffer response = new StringBuffer();
+            try {
+                url = new URL("https://hydrisapps.com/carbon/android-resources/takeover/info.json");
+              } catch (MalformedURLException e) {
+                  throw new IllegalArgumentException("invalid url");
+              }
+
+              HttpURLConnection conn = null;
+              try {
+                  conn = (HttpURLConnection) url.openConnection();
+                  conn.setDoOutput(true);
+                  conn.setConnectTimeout(4000);
+                  conn.setDoInput(true);
+                  conn.setUseCaches(false);
+                  conn.setRequestMethod("GET");
+                  conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+
+                  // handle the response
+                  int status = conn.getResponseCode();
+                  if (status != 200) {
+                      throw new IOException("Post failed with error code " + status);
+                  } else {
+                      BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                      String inputLine;
+                      while ((inputLine = in.readLine()) != null) {
+                          response.append(inputLine);
+                      }
+                      in.close();
+                  }
+              } catch (SocketTimeoutException timeout) {
+                  // Time out, don't set a background - lazy
+              } catch (Exception e) {
+                  e.printStackTrace();
+
+                  // error occured and no background WOULD be set...
+                  // get the bg info from the last fetch and use that
+                  SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+
+                  String json = mPrefs.getString("cached_takeover", null);
+
+                  if (json != null) {
+                      mInterface.onTakeoverReceived(json);
+                  }
+              } finally {
+                  if (conn != null) {
+                      conn.disconnect();
+                  }
+
+                  activity.runOnUiThread(() -> {
+                      try {
+                          JSONObject test = new JSONObject(response.toString());
+
+                          mInterface.onTakeoverReceived(response.toString());
+
+                          // cache the background
+                          SharedPreferences.Editor editor = ContextUtils.getAppSharedPreferences().edit();
+                          editor.putInt("takeover_last_update", Long.valueOf(System.currentTimeMillis()).intValue());
+                          editor.putString("cached_takeover", response.toString());
+
+                          // if (shouldCache) {
+                          //     editor.putBoolean("should_cache_bg_images", false);
+                          //
+                          //     cacheDapps(json, activity);
+                          // }
+
+                          // save
+                          editor.commit();
+                      } catch (Exception e) { }
+                  });
+              }
+          }).start();
+      }
 
     public void fetchDappsJSON(final ChromeActivity activity, final SpeedDialInterface mInterface) {
         new Thread(() -> {
@@ -72,7 +172,7 @@ public class RemoteHelper {
               HttpURLConnection conn = null;
               try {
                   conn = (HttpURLConnection) url.openConnection();
-                  conn.setDoOutput(false);
+                  conn.setDoOutput(true);
                   conn.setConnectTimeout(4000);
                   conn.setDoInput(true);
                   conn.setUseCaches(false);
@@ -112,6 +212,8 @@ public class RemoteHelper {
 
                   activity.runOnUiThread(() -> {
                       try {
+                          JSONArray test = new JSONArray(response.toString());
+
                           mInterface.onDappReceived(response.toString());
 
                           // cache the background

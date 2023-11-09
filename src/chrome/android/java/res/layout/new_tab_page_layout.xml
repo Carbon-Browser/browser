@@ -11,7 +11,6 @@
     android:background="#262626"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="10dp"
     android:visibility="gone" >
 
     <RelativeLayout
@@ -24,9 +23,17 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_alignParentTop="true"
-            android:layout_alignBottom="@+id/ntp_main_layout"
             android:adjustViewBounds="true"
             android:scaleType="centerCrop" />
+
+        <View
+            android:id="@+id/bg_image_fade"
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:layout_below="@id/bg_image_view"
+            android:layout_marginTop="-100dp"
+            android:visibility="gone"
+            android:background="@drawable/fade_bottom_gradient_dark" />
 
         <TextView
             android:id="@+id/ntp_bg_img_credit"
@@ -45,6 +52,9 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:animateLayoutChanges="true"
             android:weightSum="4">
 
             <LinearLayout
@@ -52,6 +62,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:paddingTop="5dp"
+                android:animateLayoutChanges="true"
                 android:orientation="vertical">
                 <!-- android:background="@drawable/main_layout_curved_bottom_background" -->
 
@@ -298,7 +309,7 @@
                 android:background="@drawable/ntp_rounded_background"
                 android:orientation="vertical">
 
-                <TextView
+                <!-- <TextView
                     android:id="@+id/coming_soon_textview"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -309,7 +320,7 @@
                     android:layout_marginTop="14dp"
                     android:textSize="14sp"
                     android:text="@string/coming_soon"
-                    android:layout_gravity="center" />
+                    android:layout_gravity="center" /> -->
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -392,7 +403,6 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:paddingBottom="10dp"
                     android:orientation="horizontal">
 
                     <Space
