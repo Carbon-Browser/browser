@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:orientation="horizontal"
+        android:padding="20dp"
+        android:gravity="center_vertical"
+        android:background="#1E1E1E">
+
+    <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+        <TextView
+                android:id="@+id/site_url"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#E1E1E1"
+                android:lines="1"
+                android:ellipsize="end"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:text="https://example.com"
+                tools:ignore="HardcodedText" />
+
+        <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:text="This site is trying to interact with your wallet"
+                tools:ignore="HardcodedText" />
+    </LinearLayout>
+
+    <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="0"
+            android:gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:orientation="horizontal">
+
+        <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="45dp"
+                android:text="IGNORE"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:paddingVertical="10dp"
+                android:paddingHorizontal="20dp"
+                android:gravity="center_vertical"
+                android:textColor="@android:color/white"
+                android:background="@android:color/transparent"
+                android:id="@+id/button_negative"
+                tools:ignore="HardcodedText" />
+
+        <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="45dp"
+                android:text="APPROVE"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:paddingVertical="10dp"
+                android:paddingHorizontal="20dp"
+                android:textStyle="bold"
+                android:gravity="center_vertical"
+                android:layout_marginStart="16dp"
+                android:background="@drawable/rounded_background_wallet_send_button"
+                android:id="@+id/button_positive"
+                tools:ignore="HardcodedText" />
+    </LinearLayout>
+</LinearLayout>

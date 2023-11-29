@@ -44,3 +44,6 @@
 -keep,allowobfuscation public class ** extends org.chromium.chrome.browser.base.SplitCompat*$Impl {
   public <init>();
 }
+
+# Keep all classes in the wallet package and its subpackages
+-keep class org.chromium.chrome.browser.wallet.** { *; }

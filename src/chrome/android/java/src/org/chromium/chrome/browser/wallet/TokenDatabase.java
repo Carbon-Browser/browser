@@ -11,7 +11,7 @@ import java.util.List;
 
 import wallet.core.jni.CoinType;
 
-class TokenDatabase extends SQLiteOpenHelper {
+public class TokenDatabase extends SQLiteOpenHelper {
 
     private ArrayList<TokenObj> mTokenArray = new ArrayList<TokenObj>() {{
         add(new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_carbon.png", "Carbon", "0.00", "0", "CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206", "BEP20"));

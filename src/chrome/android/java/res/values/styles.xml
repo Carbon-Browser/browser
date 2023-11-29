@@ -10,6 +10,13 @@
         <item name="android:windowAnimationStyle">@style/SpeedDialAnimation</item>
         <item name="android:backgroundDimEnabled">true</item>
     </style>
+    <style name="WalletDialogAnimation" parent="Theme.AppCompat.Light.Dialog">
+        <item name="android:windowAnimationStyle">@style/SpeedDialAnimation</item>
+        <item name="android:backgroundDimEnabled">true</item>
+
+        <item name="android:windowBackground">@null</item>
+        <item name="android:windowIsFloating">true</item>
+    </style>
     <style name="SpeedDialAnimation">
         <item name="android:windowEnterAnimation">@anim/speed_dial_enter</item>
         <item name="android:windowExitAnimation">@anim/speed_dial_exit</item>
