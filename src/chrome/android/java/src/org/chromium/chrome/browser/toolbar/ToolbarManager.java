@@ -266,6 +266,18 @@ import java.net.SocketTimeoutException;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.chrome.browser.wallet.TokenDatabase;
 
+import java.security.NoSuchAlgorithmException;
+import org.chromium.chrome.browser.wallet.CryptoAPIHelper;
+import org.bouncycastle.jcajce.provider.digest.Keccak;
+
+import 	android.widget.ProgressBar;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import java.math.RoundingMode;
+
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+
 /**
  * Contains logic for managing the toolbar visual component.  This class manages the interactions
  * with the rest of the application to ensure the toolbar is always visually up to date.
@@ -434,8 +446,14 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
     private String pendingWalletInteractionTo;
     private String pendingWalletInteractionValue;
 
+    private boolean shouldResetPendingInteraction = true;
+
     private AlertDialog mPinDialog;
     private int overrideChainId = -1;
+
+    private boolean isLoadingGas;
+
+    private View transactionConfirmationContainer;
 
     private static class TabObscuringCallback implements Callback<Boolean> {
         private final TabObscuringHandler mTabObscuringHandler;
@@ -821,26 +839,6 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                 try (TraceEvent te = TraceEvent.scoped("ToolbarManager::onPageLoadFinished")) {
                     maybeTriggerCacheRefreshForZeroSuggest(url);
                 }
-
-                try {
-                  String trustMin = loadJs(R.raw.trust_min, mActivity);
-                  int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
-                  String initJs = loadInitJs(chainId, "https://bsc-dataseed2.binance.org");
-
-                  if (url.getSpec().contains("carbon.website")) {
-                      // Create a new Handler
-                      new Handler().postDelayed(new Runnable() {
-                          @Override
-                          public void run() {
-                              tab.getWebContents().evaluateJavaScript(trustMin, null);
-                              tab.getWebContents().evaluateJavaScript(initJs, null);
-                          }
-                      }, 1500); // Delay in milliseconds (1000ms = 1 second)
-                  } else {
-                      tab.getWebContents().evaluateJavaScript(trustMin, null);
-                      tab.getWebContents().evaluateJavaScript(initJs, null);
-                  }
-                } catch (Exception ignore) {}
             }
 
             /**
@@ -974,6 +972,27 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                         && !navigation.isSameDocument()) {
                     mToolbar.onNavigatedToDifferentPage();
                 }
+
+                try {
+                  String trustMin = loadJs(R.raw.trust_min, mActivity);
+                  int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
+
+                  String initJs = loadInitJs(chainId, "https://bsc-dataseed2.binance.org");
+
+                  if (tab.getUrl().getSpec().contains("carbon.website") || tab.getUrl().getSpec().contains("lido.fi")) {
+                      // Create a new Handler
+                      new Handler().postDelayed(new Runnable() {
+                          @Override
+                          public void run() {
+                              tab.getWebContents().evaluateJavaScript(trustMin, null);
+                              tab.getWebContents().evaluateJavaScript(initJs, null);
+                          }
+                      }, 1500); // Delay in milliseconds (1000ms = 1 second)
+                  } else {
+                      tab.getWebContents().evaluateJavaScript(trustMin, null);
+                      tab.getWebContents().evaluateJavaScript(initJs, null);
+                  }
+                } catch (Exception ignore) {}
 
                 // If the load failed due to a different navigation, there is no need to reset the
                 // location bar animations.
@@ -1220,7 +1239,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             final long requestId = jsonRespone.getLong("id");
             final DAppMethod method = DAppMethod.fromValue(jsonRespone.getString("name"));
             final String requestNetwork = jsonRespone.getString("network");
-            String requestChainId = "56";
+            String requestChainId = "0x38";
 
             String trxData = "";
             String trxFrom = "";
@@ -1284,7 +1303,9 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                     }
                     break;
                 case SWITCHETHEREUMCHAIN:
-                    int extractedRequestChainId = Integer.parseInt(getStringWithoutSuffix(requestChainId));
+                    BigInteger chainIdBigInteger = new BigInteger(getStringWithoutSuffix(requestChainId), 16);
+                    int extractedRequestChainId = Integer.parseInt(chainIdBigInteger.toString());
+
                     if (pinCode.length() != 0) {
                         String chainIdHex = requestChainId;
                         // todo get number after 0x
@@ -1294,6 +1315,13 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                             WalletDataObj walletDataObj = walletAddresses.get(i);
                             if (walletDataObj.network.equals(requestNetwork)) address = walletDataObj.address;
                           }
+                          // String pendingWalletInteractionScript = "(function() {\n" +
+                          //                 "window.ethereum.emit(\"chainChanged\", \"" + chainIdHex + "\"); \n" +
+                          //                 "window." + requestNetwork + ".sendResponse(" + requestId + ", [\"" + chainIdHex + "\"]); \n" +
+                          //                 // "window." + requestNetwork + ".emitChainChanged(\"" + chainIdHex + "\") \n" +
+                          //                 "window." + requestNetwork + ".setAddress(\"" + address + "\"); \n" +
+                          //                 "})();";
+
                           String pendingWalletInteractionScript = "(function() {\n" +
                                           "window." + requestNetwork + ".emitChainChanged(\"" + chainIdHex + "\") \n" +
                                           "window." + requestNetwork + ".setAddress(\"" + address + "\"); \n" +
@@ -1329,7 +1357,24 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                     pendingWalletInteractionTo = trxTo;
                     pendingWalletInteractionValue = trxValue;
 
-                    openWalletPinVerification();
+                    if (pendingWalletInteractionGas == null || (pendingWalletInteractionGas != null && pendingWalletInteractionGas.equals(""))) {
+                        pendingWalletInteractionGas = "2bf20";
+                    }
+
+                    String url = "";
+                    if (pendingWalletInteractionPrice == null || (pendingWalletInteractionPrice != null && pendingWalletInteractionPrice.equals(""))) {
+                        try {
+                            int chainId = overrideChainId != -1 ? overrideChainId : 56;
+                            url = "https://" + (chainId == 56 ? "api.bscscan.com/api" : "api.etherscan.io/api") + "?module=proxy&action=eth_gasPrice&apikey=" + (chainId == 56 ? CryptoAPIHelper.BSCSCAN_API_KEY : CryptoAPIHelper.ETHERSCAN_API_KEY);
+
+                            isLoadingGas = true;
+                            getGasPrice(url);
+                        } catch (Exception e) {
+                          isLoadingGas = false;
+                        }
+                    }
+
+                    openWalletTransactionRequest();
                     break;
                 default:
                     break;
@@ -1400,34 +1445,84 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             });
     }
 
+    // tits
     public void openWalletTransactionRequest() {
         if (mActivity == null || mLocationBarModel == null) return;
 
         AlertDialog mWalletInteractionDialog = new AlertDialog.Builder(mActivity, R.style.WalletDialogAnimation).create();
         mWalletInteractionDialog.setCanceledOnTouchOutside(true);
 
-        View container = mActivity.getLayoutInflater().inflate(R.layout.wallet_interaction_transaction, null);
+        transactionConfirmationContainer = mActivity.getLayoutInflater().inflate(R.layout.wallet_interaction_transaction, null);
+
+        Tab tab = mLocationBarModel.getTab();
+
+        int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
 
         mWalletInteractionDialog.show();
-        mWalletInteractionDialog.setContentView(container);
+        mWalletInteractionDialog.setContentView(transactionConfirmationContainer);
 
-        // String url = mLocationBarModel.getTab().getUrl().getSpec();
+        String url = tab.getUrl().getHost();
 
-        TextView positiveButton = container.findViewById(R.id.button_positive);
+        ProgressBar gasSpinner = transactionConfirmationContainer.findViewById(R.id.gas_value_loader);
+
+        TextView gasPriceTextView = transactionConfirmationContainer.findViewById(R.id.gas_value);
+        TextView dataTextView = transactionConfirmationContainer.findViewById(R.id.data_value);
+
+        TextView chainNameTextView = transactionConfirmationContainer.findViewById(R.id.chain_name);
+        chainNameTextView.setText(chainId == 56 ? "BNBChain Mainnet" : "Ethereum Mainnet");
+
+        TextView siteUrl = transactionConfirmationContainer.findViewById(R.id.site_url);
+        siteUrl.setText(url);
+
+        TextView positiveButton = transactionConfirmationContainer.findViewById(R.id.button_positive);
         positiveButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                   mWalletInteractionDialog.dismiss();
                   openWalletPinVerification();
+                  transactionConfirmationContainer = null;
                 }
             });
-        TextView negativeButton = container.findViewById(R.id.button_negative);
+        TextView negativeButton = transactionConfirmationContainer.findViewById(R.id.button_negative);
         negativeButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                   mWalletInteractionDialog.dismiss();
+                  transactionConfirmationContainer = null;
                 }
             });
+
+        Button dataCopyButton = transactionConfirmationContainer.findViewById(R.id.data_button_copy);
+        dataCopyButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    ClipboardManager clipboard = (ClipboardManager) mActivity.getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = ClipData.newPlainText("data", pendingWalletInteractionData);
+                    clipboard.setPrimaryClip(clip);
+
+                    Toast.makeText(mActivity, "Copied to clipboard" , Toast.LENGTH_SHORT).show();
+                }
+            });
+
+        dataTextView.setText(pendingWalletInteractionData);
+
+        LinearLayout gasEstimateContainer = transactionConfirmationContainer.findViewById(R.id.gas_price_container);
+
+        // rounded_background_wallet_send_button
+        if (!isLoadingGas) {
+            positiveButton.setEnabled(true);
+            positiveButton.setBackground(mActivity.getResources().getDrawable(R.drawable.rounded_background_wallet_send_button));
+            positiveButton.setTextColor(Color.WHITE);
+
+            gasSpinner.setVisibility(View.GONE);
+            gasPriceTextView.setVisibility(View.VISIBLE);
+            gasPriceTextView.setText(getFormattedGasPrice(pendingWalletInteractionPrice));
+
+            gasEstimateContainer.setVisibility(View.VISIBLE);
+
+            TextView gasEstimateTextView = gasEstimateContainer.findViewById(R.id.max_gas_value);
+            gasEstimateTextView.setText(getSafeGasEstimate());
+        }
 
         Window dialogWindow = mWalletInteractionDialog.getWindow();
         if (dialogWindow != null) {
@@ -1500,8 +1595,25 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         onCodeChanged();
     }
 
+    private void doVibrate() {
+       try {
+         Vibrator vibrator = (Vibrator) mActivity.getSystemService(Context.VIBRATOR_SERVICE);
+
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+             // For newer versions
+             VibrationEffect effect = VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE); // 1000 milliseconds = 1 second
+             vibrator.vibrate(effect);
+         } else {
+             // For older versions
+             vibrator.vibrate(100); // 1000 milliseconds = 1 second
+         }
+       } catch ( Exception e ) {}
+    }
+
     private void onCodeChanged() {
       try {
+          doVibrate();
+
          mDot1.setBackground(mActivity.getDrawable(inputPinCode.length() >= 1 ? R.drawable.oval_shape : R.drawable.oval_shape_transparent_stroke));
          mDot2.setBackground(mActivity.getDrawable(inputPinCode.length() >= 2 ? R.drawable.oval_shape : R.drawable.oval_shape_transparent_stroke));
          mDot3.setBackground(mActivity.getDrawable(inputPinCode.length() >= 3 ? R.drawable.oval_shape : R.drawable.oval_shape_transparent_stroke));
@@ -1516,228 +1628,330 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
            handler.postDelayed(new Runnable() {
                @Override
                public void run() {
-                   try {
-                      final SharedPreferences mSharedPreferences = new EncryptSharedPreferences(mActivity).getSharedPreferences();
-                      int attempts = mSharedPreferences.getInt("PIN_CODE_ATTEMPTS", 0);
-                      int timeLock = mSharedPreferences.getInt("PIN_CODE_LOCKED", 1);
-                      long timeSinceLastAttempt = System.currentTimeMillis() - mSharedPreferences.getLong("PIN_CODE_TIME_TRACK", 0);
-
-                      // lock for 30 mins, give 5 more attempts, double time, repeat
-                      long timeToLock = timeLock * 1800000 - timeSinceLastAttempt;
-
-                      boolean isLocked = attempts >= 5 && timeSinceLastAttempt <= timeToLock;
-
-                      String pinCode = mSharedPreferences.getString("PIN_CODE_KEY", "");
-
-                      if (inputPinCode.equals(pinCode) && !isLocked) {
-                          authorizedHost = mLocationBarModel.getTab().getUrl().getHost();
-
-                          mPinDialog.dismiss();
-
-                          String mnemonic = mSharedPreferences.getString("MNEMONIC_KEY", "");
-                          HDWallet mWallet = new HDWallet(mnemonic, "");
-
-                          String address = "";
-
-                          walletAddresses.clear();
-
-                          String ethereumAddress = mWallet.getAddressForCoin(CoinType.ETHEREUM);
-                          String smartchainAddress = mWallet.getAddressForCoin(CoinType.SMARTCHAIN);
-
-                          WalletDataObj ethObj = new WalletDataObj("ethereum", ethereumAddress);
-                          WalletDataObj bscObj = new WalletDataObj("smartchain", smartchainAddress);
-
-                          walletAddresses.add(ethObj);
-                          walletAddresses.add(bscObj);
-
-                          if (pendingWalletInteractionNetwork.equals("ethereum")) {
-                            address = ethereumAddress;
-                          } else if (pendingWalletInteractionNetwork.equals("smartchain")) {
-                            address = smartchainAddress;
-                          }
-
-                          Tab tab = mLocationBarModel.getTab();
-                          if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_UNLOCK) {
-                              String pendingWalletInteractionScript = "(function() {\n" +
-                                              "window." + pendingWalletInteractionNetwork + ".setAddress(\"" + address + "\"); \n" +
-                                              "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + address + "\"]) \n" +
-                                              "})();";
-
-                              tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
-                          } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SWITCH_CHAIN) {
-                              overrideChainId = pendingWalletInteractionChainId;
-
-                              String pendingWalletInteractionScript = "(function() {\n" +
-                                              "window." + pendingWalletInteractionNetwork + ".emitChainChanged(\"" + pendingWalletInteractionChainIdHex + "\") \n" +
-                                              "window." + pendingWalletInteractionNetwork + ".setAddress(\"" + address + "\"); \n" +
-                                              "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + address + "\"]); \n" +
-                                              "})();";
-
-                              tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
-                          } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SEND_TRX) {
-                              int chainId = overrideChainId != -1 ? overrideChainId : 56;
-                              CoinType coinType = chainId == 56 ? CoinType.SMARTCHAIN : CoinType.ETHEREUM;
-
-                              PrivateKey secretPrivateKey = mWallet.getKeyForCoin(coinType);
-                              final String receiverAddress = pendingWalletInteractionTo;
-
-                              final BigDecimal wei = new BigDecimal("1000000000000000000");
-                              final BigInteger gasLimitMax = new BigInteger(pendingWalletInteractionGas != null ? getStringWithoutSuffix(pendingWalletInteractionGas) : "2bf20", 16);
-
-                              // BigDecimal gasDecimal = new BigDecimal(pendingWalletInteractionGas);
-                              //
-                              // gasDecimal = gasDecimal.multiply(wei);
-                              // BigInteger gas = gasDecimal.toBigInteger();
-                              //
-                              // BigDecimal amountDecimal = new BigDecimal(mPendingTrx.tokenAmount);
-                              // amountDecimal = amountDecimal.multiply(wei);
-                              // BigInteger amount = amountDecimal.toBigInteger();
-
-                              // String gasString = gas.toString(16);
-                              // String amountString = amount.toString(16);
-
-                              Ethereum.SigningInput.Builder signerInputBuilder = Ethereum.SigningInput.newBuilder();
-
-                              // String nonce =  TokenDatabase.getInstance(this).getTokenNonce(mPendingTrx.tokenTicker);
-                              //
-                              // BigInteger nonceBigInteger;
-                              // if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
-                              //     nonceBigInteger = new BigInteger(nonce);
-                              // } else {
-                              //     nonceBigInteger = new BigInteger(nonce, 16);
-                              // }
-
-                              // private String pendingWalletInteractionData;
-                              // private String pendingWalletInteractionFrom;
-                              // private String pendingWalletInteractionGas;
-                              // private String pendingWalletInteractionPrice;
-                              // private String pendingWalletInteractionTo;
-                              // private String pendingWalletInteractionValue;
-
-                              final String ticker = chainId == 56 ? "BSC" : "ETH";
-
-                              String nonce = TokenDatabase.getInstance(mActivity).getTokenNonce(ticker);
-                              boolean shouldStoreAsHex = false;
-                              BigInteger nonceBigInteger;
-                              if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
-                                  nonceBigInteger = new BigInteger(nonce);
-                                  if (nonceBigInteger.compareTo(BigInteger.valueOf(9)) <= 0) {
-                                      shouldStoreAsHex = false;
-                                  } else {
-                                      shouldStoreAsHex = true;
-                                  }
-                              } else {
-                                  nonceBigInteger = new BigInteger(nonce, 16);
-                                  shouldStoreAsHex = true;
-                              }
-                              nonceBigInteger = nonceBigInteger.add(BigInteger.ONE);
-
-                              TokenDatabase.getInstance(mActivity).setTokenNonce(ticker, shouldStoreAsHex ? nonceBigInteger.toString(16) : nonceBigInteger.toString());
-
-                              BigInteger nonceToUse;
-                              if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
-                                  nonceToUse = new BigInteger(nonce);
-                              } else {
-                                  nonceToUse = new BigInteger(nonce, 16);
-                              }
-
-                              pendingWalletInteractionGas = getStringWithoutSuffix(pendingWalletInteractionGas);
-
-                              BigInteger gasBigInteger = new BigInteger("b2d05e00", 16);
-
-                              signerInputBuilder.setChainId(ByteString.copyFrom((new BigInteger(chainId+"").toByteArray())));
-                              signerInputBuilder.setGasPrice(toByteString(gasBigInteger));
-                              signerInputBuilder.setGasLimit(toByteString(gasLimitMax));
-                              signerInputBuilder.setNonce(toByteString(nonceToUse));
-                              signerInputBuilder.setPrivateKey(ByteString.copyFrom(secretPrivateKey.data()));
-
-                              // BEP/ERC20
-                              signerInputBuilder.setToAddress(pendingWalletInteractionTo); // contract address
-
-                              Ethereum.Transaction.Builder ethTrxBuilder = Ethereum.Transaction.newBuilder();
-
-                              List<String> decodedData = decodeTransactionData(pendingWalletInteractionData);
-
-                              Ethereum.Transaction.Transfer.Builder ethTrxTransferBuilder = Ethereum.Transaction.Transfer.newBuilder();
-                              ethTrxTransferBuilder.setAmount(ByteString.copyFrom(new BigInteger(getStringWithoutSuffix(pendingWalletInteractionValue), 16).toByteArray()));
-                              ethTrxTransferBuilder.setData(ByteString.copyFrom(hexStringToByteArray(pendingWalletInteractionData)));
-
-                              ethTrxBuilder.setTransfer(ethTrxTransferBuilder.build());
-
-                              signerInputBuilder.setTransaction(ethTrxBuilder.build());
-
-                              Ethereum.SigningInput signerInput = signerInputBuilder.build();
-
-                              Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
-
-                              secretPrivateKey = null;
-
-                              String url = "";
-                              if (chainId == 56) {
-                                  url = "https://go.getblock.io/5855ef8cc8c04dfd808817090d98dd7c";
-                              } else {
-                                  url = "https://go.getblock.io/56d1ba70818d40a19f936b8a0bffcece";
-                              }
-
-                              String body = "{"
-                                  + "\"jsonrpc\": \"2.0\","
-                                  + "\"method\": \"eth_sendRawTransaction\","
-                                  + "\"params\": ["
-                                  + "\"" + toHexString(signerOutput.getEncoded().toByteArray(), true) + "\""
-                                  + "],"
-                                  + "\"id\": \"getblock.io\""
-                                  + "}";
-
-                              //sendTransaction(url, body);
-                          }
-
-                          mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", 0).commit();
-                          mSharedPreferences.edit().putLong("PIN_CODE_TIME_TRACK", 0).commit();
-                          mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", 0).commit();
-
-                          inputPinCode = "";
-                          mnemonic = "";
-                          mWallet = null;
-                          onCodeChanged();
-                      } else {
-                          if (timeSinceLastAttempt > timeToLock || attempts < 4) {
-                              if (timeSinceLastAttempt > timeToLock && attempts > 4) {
-                                attempts = 0;
-                                mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", 0).commit();
-                              }
-
-                              mSharedPreferences.edit().putLong("PIN_CODE_TIME_TRACK", System.currentTimeMillis()).commit();
-
-                              Toast.makeText(mActivity, ("Incorrect pin, try again. " + (5 - (attempts + 1)) + " attempts remaining.") , Toast.LENGTH_SHORT).show();
-
-                              mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", attempts + 1).commit();
-
-                              inputPinCode = "";
-                              onCodeChanged();
-                          } else {
-                              Toast.makeText(mActivity, ("Wallet locked. Try again in " + timeConversion(timeToLock)) , Toast.LENGTH_SHORT).show();
-                          }
-                      }
-
-                      pendingWalletInteractionType = null;
-                      pendingWalletInteractionNetwork = null;
-                      pendingWalletInteractionId = -1;
-                      pendingWalletInteractionCallback = null;
-                      pendingWalletInteractionData = null;
-                      pendingWalletInteractionFrom = null;
-                      pendingWalletInteractionGas = null;
-                      pendingWalletInteractionPrice = null;
-                      pendingWalletInteractionTo = null;
-                      pendingWalletInteractionValue = null;
-
-                      pinCode = "";
-                   } catch (Exception ignore) { }
+                  processRequest();
                }
            }, 500);
          }
       } catch (Exception ignore) { }
     }
 
+    private void getGasPrice(String url) {
+        new AsyncTask<String>() {
+            @Override
+            protected String doInBackground() {
+                HttpURLConnection conn = null;
+                StringBuffer response = new StringBuffer();
+                try {
+                    URL mUrl = new URL(url);
+
+                    conn = (HttpURLConnection) mUrl.openConnection();
+                    conn.setDoOutput(false);
+                    conn.setConnectTimeout(20000);
+                    conn.setDoInput(true);
+                    conn.setUseCaches(false);
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+
+                    // handle the response
+                    int status = conn.getResponseCode();
+                    if (status != 200) {
+                        throw new IOException("Post failed with error code " + status);
+                    } else {
+                        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        String inputLine;
+                        while ((inputLine = in.readLine()) != null) {
+                            response.append(inputLine);
+                        }
+                        in.close();
+                    }
+                } catch (SocketTimeoutException timeout) {
+                  timeout.printStackTrace();
+                    // Time out, don't set a background - lazy
+                } catch (Exception e) {
+                    isLoadingGas = false;
+                } finally {
+                    if (conn != null)
+                        conn.disconnect();
+                }
+
+                return response.toString();
+            }
+
+            @Override
+            protected void onPostExecute(String result) {
+                isLoadingGas = false;
+                try {
+                    JSONObject jsonResult = new JSONObject(result);
+                    pendingWalletInteractionPrice = jsonResult.getString("result");
+
+                    TextView positiveButton = transactionConfirmationContainer.findViewById(R.id.button_positive);
+                    ProgressBar gasSpinner = transactionConfirmationContainer.findViewById(R.id.gas_value_loader);
+                    TextView gasPriceTextView = transactionConfirmationContainer.findViewById(R.id.gas_value);
+                    LinearLayout gasEstimateContainer = transactionConfirmationContainer.findViewById(R.id.gas_price_container);
+
+                    gasSpinner.setVisibility(View.GONE);
+                    gasPriceTextView.setVisibility(View.VISIBLE);
+                    gasPriceTextView.setText(getFormattedGasPrice(pendingWalletInteractionPrice));
+
+                    gasEstimateContainer.setVisibility(View.VISIBLE);
+                    TextView gasEstimateTextView = gasEstimateContainer.findViewById(R.id.max_gas_value);
+                    gasEstimateTextView.setText(getSafeGasEstimate());
+
+                    positiveButton.setEnabled(true);
+                    positiveButton.setBackground(mActivity.getResources().getDrawable(R.drawable.rounded_background_wallet_send_button));
+                    positiveButton.setTextColor(Color.WHITE);
+                } catch (Exception e) {}
+            }
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+
+    private String getSafeGasEstimate() {
+        try {
+            BigInteger gasLimitBigInteger = new BigInteger(getStringWithoutSuffix(pendingWalletInteractionGas), 16);
+            BigDecimal gasLimitBigDecimal = new BigDecimal(gasLimitBigInteger);
+
+            BigDecimal gasPriceBigDecimal = new BigDecimal(getFormattedGasPrice(pendingWalletInteractionPrice));
+
+            BigDecimal price = gasPriceBigDecimal.multiply(gasLimitBigDecimal);
+
+            int chainId = overrideChainId != -1 ? overrideChainId : 56;
+
+            String tokenPriceUsd = TokenDatabase.getInstance(mActivity).getTokenUSDValue(chainId != 56);
+            BigDecimal maxUsdBigDecimal = new BigDecimal(tokenPriceUsd);
+            maxUsdBigDecimal = maxUsdBigDecimal.multiply(price);
+            maxUsdBigDecimal = maxUsdBigDecimal.setScale(5, RoundingMode.HALF_UP);
+
+            return price.toPlainString() + " / $" + maxUsdBigDecimal.toPlainString();
+        } catch (Exception e) {
+          return "";
+        }
+    }
+
+    private String getFormattedGasPrice(String amount) {
+        String safeAmount = getStringWithoutSuffix(amount);
+
+        BigDecimal wei = new BigDecimal("1000000000000000000");
+
+        BigInteger amountBigInteger = new BigInteger(safeAmount, 16);
+
+        BigDecimal amountBigDecimal = new BigDecimal(amountBigInteger);
+        amountBigDecimal = amountBigDecimal.divide(wei);
+
+        amountBigDecimal = amountBigDecimal.stripTrailingZeros();
+
+        return amountBigDecimal.toPlainString();
+    }
+
+    private void processRequest() {
+        //
+        try {
+           final SharedPreferences mSharedPreferences = new EncryptSharedPreferences(mActivity).getSharedPreferences();
+           int attempts = mSharedPreferences.getInt("PIN_CODE_ATTEMPTS", 0);
+           int timeLock = mSharedPreferences.getInt("PIN_CODE_LOCKED", 1);
+           long timeSinceLastAttempt = System.currentTimeMillis() - mSharedPreferences.getLong("PIN_CODE_TIME_TRACK", 0);
+
+           // lock for 30 mins, give 5 more attempts, double time, repeat
+           long timeToLock = timeLock * 1800000 - timeSinceLastAttempt;
+
+           boolean isLocked = attempts >= 5 && timeSinceLastAttempt <= timeToLock;
+
+           String pinCode = mSharedPreferences.getString("PIN_CODE_KEY", "");
+
+           if (inputPinCode.equals(pinCode) && !isLocked) {
+               authorizedHost = mLocationBarModel.getTab().getUrl().getHost();
+
+               mPinDialog.dismiss();
+
+
+               String mnemonic = mSharedPreferences.getString("MNEMONIC_KEY", "");
+               HDWallet mWallet = new HDWallet(mnemonic, "");
+
+               String address = "";
+
+               walletAddresses.clear();
+
+               String ethereumAddress = mWallet.getAddressForCoin(CoinType.ETHEREUM);
+               String smartchainAddress = mWallet.getAddressForCoin(CoinType.SMARTCHAIN);
+
+               WalletDataObj ethObj = new WalletDataObj("ethereum", ethereumAddress);
+               WalletDataObj bscObj = new WalletDataObj("smartchain", smartchainAddress);
+
+               walletAddresses.add(ethObj);
+               walletAddresses.add(bscObj);
+
+               if (pendingWalletInteractionNetwork.equals("ethereum")) {
+                 address = ethereumAddress;
+               } else if (pendingWalletInteractionNetwork.equals("smartchain")) {
+                 address = smartchainAddress;
+               }
+
+               Tab tab = mLocationBarModel.getTab();
+               if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_UNLOCK) {
+                   String pendingWalletInteractionScript = "(function() {\n" +
+                                   "window." + pendingWalletInteractionNetwork + ".setAddress(\"" + address + "\"); \n" +
+                                   "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + address + "\"]) \n" +
+                                   "})();";
+
+                   tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
+               } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SWITCH_CHAIN) {
+                   overrideChainId = pendingWalletInteractionChainId;
+
+                   String pendingWalletInteractionScript = "(function() {\n" +
+                                   "window." + pendingWalletInteractionNetwork + ".emitChainChanged(\"" + pendingWalletInteractionChainIdHex + "\") \n" +
+                                   "window." + pendingWalletInteractionNetwork + ".setAddress(\"" + address + "\"); \n" +
+                                   "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + address + "\"]); \n" +
+                                   "})();";
+
+                   tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
+               } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SEND_TRX) {
+                   int chainId = overrideChainId != -1 ? overrideChainId : 56;
+                   CoinType coinType = chainId == 56 ? CoinType.SMARTCHAIN : CoinType.ETHEREUM;
+
+                   PrivateKey secretPrivateKey = mWallet.getKeyForCoin(coinType);
+                   final String receiverAddress = pendingWalletInteractionTo;
+
+                   final BigInteger gasLimitMax = new BigInteger(getStringWithoutSuffix(pendingWalletInteractionGas), 16);
+
+                   Ethereum.SigningInput.Builder signerInputBuilder = Ethereum.SigningInput.newBuilder();
+
+                   final String ticker = chainId == 56 ? "BSC" : "ETH";
+
+                   String nonce = TokenDatabase.getInstance(mActivity).getTokenNonce(ticker);
+                   BigInteger nonceToUse;
+                   if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
+                       nonceToUse = new BigInteger(nonce);
+                   } else {
+                       nonceToUse = new BigInteger(nonce, 16);
+                   }
+
+                   BigInteger gasPriceBigInteger;
+                   if (pendingWalletInteractionPrice == null) {
+                       gasPriceBigInteger = new BigInteger("b2d05e00", 16);
+                   } else {
+                       gasPriceBigInteger = new BigInteger(getStringWithoutSuffix(pendingWalletInteractionPrice), 16);
+                   }
+
+                   signerInputBuilder.setChainId(ByteString.copyFrom((new BigInteger(chainId+"").toByteArray())));
+                   signerInputBuilder.setGasPrice(toByteString(gasPriceBigInteger));
+                   signerInputBuilder.setGasLimit(toByteString(gasLimitMax));
+                   signerInputBuilder.setNonce(toByteString(nonceToUse));
+                   signerInputBuilder.setPrivateKey(ByteString.copyFrom(secretPrivateKey.data()));
+
+                   // BEP/ERC20
+                   signerInputBuilder.setToAddress(pendingWalletInteractionTo); // contract address
+
+                   Ethereum.Transaction.Builder ethTrxBuilder = Ethereum.Transaction.newBuilder();
+
+                   Ethereum.Transaction.Transfer.Builder ethTrxTransferBuilder = Ethereum.Transaction.Transfer.newBuilder();
+                   if (pendingWalletInteractionValue != null && !pendingWalletInteractionValue.equals("")) {
+                      ethTrxTransferBuilder.setAmount(ByteString.copyFrom(new BigInteger(getStringWithoutSuffix(pendingWalletInteractionValue), 16).toByteArray()));
+                   }
+                   ethTrxTransferBuilder.setData(ByteString.copyFrom(hexStringToByteArray(pendingWalletInteractionData)));
+
+                   ethTrxBuilder.setTransfer(ethTrxTransferBuilder.build());
+
+                   signerInputBuilder.setTransaction(ethTrxBuilder.build());
+
+                   Ethereum.SigningInput signerInput = signerInputBuilder.build();
+
+                   Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
+
+                   secretPrivateKey = null;
+
+                   String url = "";
+                   if (chainId == 56) {
+                       url = "https://go.getblock.io/5855ef8cc8c04dfd808817090d98dd7c";
+                   } else {
+                       url = "https://go.getblock.io/56d1ba70818d40a19f936b8a0bffcece";
+                   }
+
+                   String body = "{"
+                       + "\"jsonrpc\": \"2.0\","
+                       + "\"method\": \"eth_sendRawTransaction\","
+                       + "\"params\": ["
+                       + "\"" + toHexString(signerOutput.getEncoded().toByteArray(), true) + "\""
+                       + "],"
+                       + "\"id\": \"getblock.io\""
+                       + "}";
+
+                   shouldResetPendingInteraction = false;
+
+                   sendTransaction(url, body);
+               }
+
+               mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", 0).commit();
+               mSharedPreferences.edit().putLong("PIN_CODE_TIME_TRACK", 0).commit();
+               mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", 0).commit();
+
+               mnemonic = "";
+               mWallet = null;
+           } else {
+               if (timeSinceLastAttempt > timeToLock || attempts < 4) {
+                   if (timeSinceLastAttempt > timeToLock && attempts > 4) {
+                     attempts = 0;
+                     mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", 0).commit();
+                   }
+
+                   mSharedPreferences.edit().putLong("PIN_CODE_TIME_TRACK", System.currentTimeMillis()).commit();
+
+                   Toast.makeText(mActivity, ("Incorrect pin, try again. " + (5 - (attempts + 1)) + " attempts remaining.") , Toast.LENGTH_SHORT).show();
+
+                   mSharedPreferences.edit().putInt("PIN_CODE_ATTEMPTS", attempts + 1).commit();
+               } else {
+                   Toast.makeText(mActivity, ("Wallet locked. Try again in " + timeConversion(timeToLock)) , Toast.LENGTH_SHORT).show();
+               }
+           }
+
+           pinCode = "";
+        } catch (Exception ignore) { }
+
+        inputPinCode = "";
+        onCodeChanged();
+
+        if (shouldResetPendingInteraction) {
+            pendingWalletInteractionNetwork = null;
+            pendingWalletInteractionId = -1;
+            pendingWalletInteractionCallback = null;
+            pendingWalletInteractionType = null;
+            pendingWalletInteractionData = null;
+            pendingWalletInteractionFrom = null;
+            pendingWalletInteractionGas = null;
+            pendingWalletInteractionPrice = null;
+            pendingWalletInteractionTo = null;
+            pendingWalletInteractionValue = null;
+        }
+    }
+
+    private byte[] keccak256(byte[] data) {
+        Keccak.Digest256 digest = new Keccak.Digest256();
+        return digest.digest(data);
+    }
+
+    public String encodeTransferData(String address, String amount) throws NoSuchAlgorithmException {
+        String functionSignature = "transfer(address,uint256)";
+        byte[] signatureHash = keccak256(functionSignature.getBytes(StandardCharsets.UTF_8));
+
+        String addressPadded = padLeft(address.replace("0x", ""), 64);
+        String amountPadded = padLeft(amount, 64);
+
+        return bytesToHex(signatureHash).substring(0, 8) + addressPadded + amountPadded;
+    }
+
+    public String padLeft(String s, int n) {
+        return String.format("%1$" + n + "s", s).replace(' ', '0');
+    }
+
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder hexString = new StringBuilder(2 * bytes.length);
+        for (byte b : bytes) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) {
+                hexString.append('0');
+            }
+            hexString.append(hex);
+        }
+        return hexString.toString();
+    }
 
     public static byte[] hexStringToByteArray(String input) {
         String cleanInput = cleanHexPrefix(input);
@@ -1828,42 +2042,141 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
           @Override
           protected void onPostExecute(String result) {
               try {
+                  shouldResetPendingInteraction = true;
                   Tab tab = mLocationBarModel.getTab();
 
                   JSONObject jsonResult = new JSONObject(result);
 
-                  String pendingWalletInteractionScript = "(function() {\n" +
-                                  "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + jsonResult.getString("result") + "\"]); \n" +
-                                  "})();";
+                  // String pendingWalletInteractionScript = "(function() {\n" +
+                  //                 "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + jsonResult.getString("result") + "\"]); \n" +
+                  //                 "})();";
+                  //
+                  // tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
 
-                  tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
-              } catch (Exception e) { }
+                  openTrxConfirmation(jsonResult.getString("result"));
+
+                  tab.reload();
+
+                  // update nonce
+                  int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
+                  final String ticker = chainId == 56 ? "BSC" : "ETH";
+                  String nonce = TokenDatabase.getInstance(mActivity).getTokenNonce(ticker);
+
+                  boolean shouldStoreAsHex = false;
+                  BigInteger nonceBigInteger;
+                  if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
+                      nonceBigInteger = new BigInteger(nonce);
+                      if (nonceBigInteger.compareTo(BigInteger.valueOf(9)) <= 0) {
+                          shouldStoreAsHex = false;
+                      } else {
+                          shouldStoreAsHex = true;
+                      }
+                  } else {
+                      nonceBigInteger = new BigInteger(nonce, 16);
+                      shouldStoreAsHex = true;
+                  }
+                  nonceBigInteger = nonceBigInteger.add(BigInteger.ONE);
+                  TokenDatabase.getInstance(mActivity).setTokenNonce(ticker, shouldStoreAsHex ? nonceBigInteger.toString(16) : nonceBigInteger.toString());
+              } catch (Exception e) {
+                showTransactionError(result);
+              }
+
+              pendingWalletInteractionNetwork = null;
+              pendingWalletInteractionId = -1;
+              pendingWalletInteractionCallback = null;
+              pendingWalletInteractionType = null;
+              pendingWalletInteractionData = null;
+              pendingWalletInteractionFrom = null;
+              pendingWalletInteractionGas = null;
+              pendingWalletInteractionPrice = null;
+              pendingWalletInteractionTo = null;
+              pendingWalletInteractionValue = null;
           }
       }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    private static List<String> decodeTransactionData(String data) {
-        List<String> result = new ArrayList<>();
+    private void showTransactionError(String result) {
+        if (mActivity == null) return;
 
-        if (data == null || data.length() <= 10) {
-            result.add("Invalid data");
-            return result;
+        AlertDialog mWalletInteractionDialog = new AlertDialog.Builder(mActivity, R.style.WalletDialogAnimation).create();
+        mWalletInteractionDialog.setCanceledOnTouchOutside(true);
+
+        View container = mActivity.getLayoutInflater().inflate(R.layout.wallet_interaction_transaction_error, null);
+
+        mWalletInteractionDialog.show();
+        mWalletInteractionDialog.setContentView(container);
+
+        TextView errorText = container.findViewById(R.id.error_text);
+        errorText.setText(result);
+
+        TextView positiveButton = container.findViewById(R.id.button_positive);
+        positiveButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                  mWalletInteractionDialog.dismiss();
+                }
+            });
+
+        Window dialogWindow = mWalletInteractionDialog.getWindow();
+        if (dialogWindow != null) {
+            dialogWindow.setGravity(Gravity.BOTTOM);
+
+            // Set the attributes to match parent width
+            WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
+            layoutParams.copyFrom(dialogWindow.getAttributes());
+            layoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
+            layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+            dialogWindow.setAttributes(layoutParams);
         }
+    }
 
-        // Skip '0x' and the first 8 characters for function hash
-        String withoutFunctionHash = data.substring(10);
+    private void openTrxConfirmation(String id) {
+        if (mActivity == null || mLocationBarModel == null) return;
 
-        // Next 40 characters are the address
-        String addressHex = withoutFunctionHash.substring(0, 64).substring(24); // Last 40 characters
-        String address = "0x" + addressHex;
-        result.add(address);
+        Tab tab = mLocationBarModel.getTab();
 
-        // Next 64 characters are the numeric value
-        String valueHex = withoutFunctionHash.substring(64, 128);
-        BigInteger value = new BigInteger(valueHex, 16);
-        result.add(value.toString());
+        int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
 
-        return result;
+        AlertDialog mWalletInteractionDialog = new AlertDialog.Builder(mActivity, R.style.WalletDialogAnimation).create();
+        mWalletInteractionDialog.setCanceledOnTouchOutside(true);
+
+        View container = mActivity.getLayoutInflater().inflate(R.layout.wallet_interaction_transaction_confirmation, null);
+
+        mWalletInteractionDialog.show();
+        mWalletInteractionDialog.setContentView(container);
+
+        String url = tab.getUrl().getHost();
+
+        TextView positiveButton = container.findViewById(R.id.button_positive);
+        positiveButton.setText("OPEN IN " +(chainId == 56 ? "BSCSCAN" : "ETHERSCAN"));
+        positiveButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                  mWalletInteractionDialog.dismiss();
+                  String url = chainId != 56 ? "https://etherscan.io/tx/" : "https://bscscan.com/tx/";
+                  url = url + id;
+                  loadUrl(url, v);
+                }
+            });
+        TextView negativeButton = container.findViewById(R.id.button_negative);
+        negativeButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                  mWalletInteractionDialog.dismiss();
+                }
+            });
+
+        Window dialogWindow = mWalletInteractionDialog.getWindow();
+        if (dialogWindow != null) {
+            dialogWindow.setGravity(Gravity.BOTTOM);
+
+            // Set the attributes to match parent width
+            WindowManager.LayoutParams layoutParams = new WindowManager.LayoutParams();
+            layoutParams.copyFrom(dialogWindow.getAttributes());
+            layoutParams.width = WindowManager.LayoutParams.MATCH_PARENT;
+            layoutParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+            dialogWindow.setAttributes(layoutParams);
+        }
     }
 
     public String toHexString(byte[] data, boolean withPrefix) {

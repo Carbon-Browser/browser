@@ -147,7 +147,10 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             isValid = true;
             gasLoader.setVisibility(View.GONE);
             nextButton.setText("GO NEXT");
-        } catch (Exception ignore) {}
+        } catch (Exception e) {
+            Toast.makeText(getActivity(), "Please check that all the fields are valid.", Toast.LENGTH_SHORT).show();
+            gasLoader.setVisibility(View.GONE);
+        }
     }
 
     private BigDecimal removeZerosAfterDecimal(BigDecimal number, int zerosToRemove) {
@@ -226,6 +229,9 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
         nextButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                if (mRecipientAddress != null) mRecipientAddress = mRecipientAddress.replace(" ", "");
+
+
                 if (!isValid && !isShowingAdvanced) {
                   validate();
                 } else if (mRecipientAddress == null || mRecipientAddress.equals("")

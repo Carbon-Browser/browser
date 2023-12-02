@@ -62,6 +62,7 @@ public class WalletPreferencesAddCustomToken extends Fragment {
     private String tokenNetwork = "BEP20";
     private String tokenName;
     private String tokenSymbol;
+    private String tokenDenomination;
 
     private TokenObj mTokenObj;
 
@@ -117,7 +118,7 @@ public class WalletPreferencesAddCustomToken extends Fragment {
                     Toast.makeText(
                           getActivity(), "Could not verify token. Proceed with caution.", Toast.LENGTH_SHORT).show();
 
-                    mTokenObj = new TokenObj(true, "", tokenName, "0.00", "0", tokenSymbol, tokenAddress, tokenNetwork);
+                    mTokenObj = new TokenObj(true, "", tokenName, "0.00", "0", tokenSymbol, tokenAddress, tokenNetwork/*, "1000000000000000000"*/);
                 } else {
                     mTokenNameEditText.setEnabled(false);
                     mAddressEditText.setEnabled(false);
@@ -132,7 +133,7 @@ public class WalletPreferencesAddCustomToken extends Fragment {
                         mTokenSymbolEditText.setText(jsonObj.getString("symbol"));
 
                         mTokenObj = new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/blockchains/" + chain + "/assets/" + jsonObj.getString("id") + "/logo.png",
-                              jsonObj.getString("name"), "0.00", "0", jsonObj.getString("symbol"), jsonObj.getString("id"), tokenNetwork);
+                              jsonObj.getString("name"), "0.00", "0", jsonObj.getString("symbol"), jsonObj.getString("id"), tokenNetwork/*, jsonObj.getString("decimals")*/);
                     } catch (Exception ignore) { }
                 }
 

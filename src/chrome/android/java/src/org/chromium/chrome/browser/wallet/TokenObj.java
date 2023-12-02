@@ -17,6 +17,7 @@ public class TokenObj {
 
     public String iconUrl;
     public String chain; // contract address
+    // public String decimals;
 
     public TokenObj(CoinType coinType, String iconUrl, String name, String usdValue, String balance, String ticker, String chainName) {
         this.coinType = coinType;
@@ -28,7 +29,7 @@ public class TokenObj {
         this.chainName = chainName;
     }
 
-    public TokenObj(boolean isCustomType, String iconUrl, String name, String usdValue, String balance, String ticker, String chain, String chainName) {
+    public TokenObj(boolean isCustomType, String iconUrl, String name, String usdValue, String balance, String ticker, String chain, String chainName/*, String decimals*/) {
         this.isCustomType = isCustomType;
         this.chain = chain;
         this.chainName = chainName;
@@ -38,5 +39,7 @@ public class TokenObj {
         this.usdValue = usdValue;
         this.balance = balance;
         this.ticker = ticker;
+
+        // this.decimals = decimals;
     }
 }

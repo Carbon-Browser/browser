@@ -28,10 +28,10 @@ import java.nio.charset.StandardCharsets;
 
 public class CryptoAPIHelper {
 
-    private static final String ETHERSCAN_API_KEY = "EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ";
-    private static final String BSCSCAN_API_KEY = "UVMB2DE897HHNS5UX5U5X4U438N54F73IG";
+    public static final String ETHERSCAN_API_KEY = "EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ";
+    public static final String BSCSCAN_API_KEY = "UVMB2DE897HHNS5UX5U5X4U438N54F73IG";
 
-    private static final String INFURNA_API_KEY = "ed0c2c977c8b4f69b8d2b11a0b7c05e7";
+    public static final String INFURNA_API_KEY = "ed0c2c977c8b4f69b8d2b11a0b7c05e7";
 
     private static WalletInterface mWalletInterface;
 
@@ -213,6 +213,8 @@ public class CryptoAPIHelper {
                     case BNB_BALANCE:
                     case ETH_BALANCE:
                         try {
+                            // TODO use token denomination instead of wei
+
                             JSONObject jsonObjectBalance = new JSONObject(result);
                             String balance = jsonObjectBalance.getString("result");
                             BigDecimal balanceB = new BigDecimal(balance);
@@ -222,7 +224,7 @@ public class CryptoAPIHelper {
 
                             balanceB = balanceB.divide(wei, mc);
 
-                            // divide by 1000000000000000000 because api returns Wei
+                            // divide by token decimals
 
                             balanceB = balanceB.setScale(6, BigDecimal.ROUND_HALF_DOWN);
                             balance = balanceB.toString();
@@ -290,7 +292,7 @@ public class CryptoAPIHelper {
     }
 
     public void getERCBalance(String contractaddress, String address, String tokenSymbol) {
-        String url = "https://api.etherscan.io/api?module=account&action=tokennfttx&contractaddress="
+        String url = "https://api.etherscan.io/api?module=account&action=tokenbalance&contractaddress="
         + contractaddress
         + "&address=" + address
         + "&sort=desc&apikey=" + ETHERSCAN_API_KEY;
