@@ -514,6 +514,14 @@ by a child template that "extends" this file.
                 <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
                 {% endif %}
             </intent-filter>
+
+            <intent-filter>
+                <data android:scheme="carbonwallet"/>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+            </intent-filter>
+
             <meta-data android:name="android.app.shortcuts"
                 android:resource="@xml/launchershortcuts" />
             {{ self.supports_vr() }}

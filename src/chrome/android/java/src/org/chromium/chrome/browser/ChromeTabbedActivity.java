@@ -227,6 +227,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 
+import android.widget.Button;
+
 /**
  * This is the main activity for ChromeMobile when not running in document mode.  All the tabs
  * are accessible via a chrome specific tab switching UI.
@@ -953,11 +955,36 @@ public class ChromeTabbedActivity extends ChromeActivity<ChromeActivityComponent
         }
     }
 
+    public void onPassCodeButtonPressed(View v) {
+        ToolbarManager toolbarManager = getToolbarManager();
+        toolbarManager.pinCodePressed(((Button)v).getText().toString());
+    }
+
+    public void onDeleteCodePressed(View v) {
+        ToolbarManager toolbarManager = getToolbarManager();
+        toolbarManager.deletePinCodePressed();
+    }
+
     @Override
     public void onNewIntent(Intent intent) {
         // The intent to use in maybeDispatchExplicitMainViewIntent(). We're explicitly
         // adding NEW_TASK flag to make sure backing from CCT brings up the caller activity,
         // and not Chrome
+
+            try {
+                if (intent != null) {
+
+                android.net.Uri data = intent.getData();
+                if (data != null && data.toString().startsWith("carbonwallet")) {
+                    ToolbarManager toolbarManager = getToolbarManager();
+                    toolbarManager.handleWalletInteraction(data.getHost());
+
+                    return;
+                }
+
+              }
+            } catch (Exception ignore) { }
+
         Intent intentForDispatching = new Intent(intent);
         intentForDispatching.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         @LaunchIntentDispatcher.Action

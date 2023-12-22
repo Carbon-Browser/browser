@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:gravity="center_vertical"
+    android:background="#1E1E1E">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Error broadcasting transaction"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/white"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Transaction not sent. Please try again &amp; contact support."
+        android:layout_marginTop="20dp"
+        android:textColor="@android:color/white"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/error_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Transaction not sent. Please try again &amp; contact support."
+        android:layout_marginTop="10dp"
+        android:textSize="10sp"
+        android:textColor="#a4a4a4"
+        tools:ignore="HardcodedText,SmallSp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:gravity="bottom|end"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/button_negative"
+            android:layout_width="wrap_content"
+            android:gravity="center"
+            android:textAllCaps="true"
+            android:textStyle="bold"
+            android:paddingVertical="10dp"
+            android:layout_gravity="end"
+            android:layout_marginEnd="12dp"
+            android:paddingHorizontal="20dp"
+            android:layout_height="45dp"
+            android:background="@drawable/rounded_background_wallet_send_button"
+            android:textColor="@android:color/white"
+            android:text="get help"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:id="@+id/button_positive"
+            android:layout_width="wrap_content"
+            android:gravity="center"
+            android:textAllCaps="true"
+            android:textStyle="bold"
+            android:paddingVertical="10dp"
+            android:layout_gravity="end"
+            android:paddingHorizontal="20dp"
+            android:layout_height="45dp"
+            android:background="@android:color/transparent"
+            android:textColor="@android:color/white"
+            android:text="close"
+            tools:ignore="HardcodedText" />
+    </LinearLayout>
+
+</LinearLayout>

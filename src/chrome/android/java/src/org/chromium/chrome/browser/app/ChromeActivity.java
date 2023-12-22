@@ -253,6 +253,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.chromium.components.adblock.AdblockController;
+import org.chromium.chrome.browser.tab.TLDUtils;
 
 /**
  * A {@link AsyncInitializationActivity} that builds and manages a {@link CompositorViewHolder}
@@ -270,6 +271,8 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
     private C mComponent;
 
     private AdblockController mAdblockController;
+
+    private TLDUtils mTLDUtils;
 
     /** Used to access the {@link ShareDelegate} from {@link WindowAndroid}. */
     private final UnownedUserDataSupplier<ShareDelegate> mShareDelegateSupplier =
@@ -1364,6 +1367,8 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
 
         mAdblockController = new AdblockController();
         mAdblockController.bindInstance(mAdblockController);
+
+        mTLDUtils = TLDUtils.getInstance(this, R.raw.standard_tld_13_12_23);
     }
 
     /**
@@ -1607,6 +1612,14 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
         if (mStylusWritingCoordinator != null) {
             mStylusWritingCoordinator.destroy();
             mStylusWritingCoordinator = null;
+        }
+
+        if (mAdblockController != null) {
+           mAdblockController = null;
+        }
+
+        if (mTLDUtils != null) {
+          mTLDUtils = null;
         }
 
         mActivityTabProvider.destroy();

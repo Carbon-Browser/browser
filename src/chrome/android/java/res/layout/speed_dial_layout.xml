@@ -2,6 +2,7 @@
 <org.chromium.chrome.browser.suggestions.speed_dial.SpeedDialGridView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:paddingTop="15dp"
+    android:layout_weight="1"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 </org.chromium.chrome.browser.suggestions.speed_dial.SpeedDialGridView>

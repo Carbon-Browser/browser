@@ -28,10 +28,10 @@ import java.nio.charset.StandardCharsets;
 
 public class CryptoAPIHelper {
 
-    private static final String ETHERSCAN_API_KEY = "EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ";
-    private static final String BSCSCAN_API_KEY = "UVMB2DE897HHNS5UX5U5X4U438N54F73IG";
+    public static final String ETHERSCAN_API_KEY = "EGB6VW4Y4CNTQD3FP4TGA3MAWS3M9TTUKZ";
+    public static final String BSCSCAN_API_KEY = "UVMB2DE897HHNS5UX5U5X4U438N54F73IG";
 
-    private static final String INFURNA_API_KEY = "ed0c2c977c8b4f69b8d2b11a0b7c05e7";
+    public static final String INFURNA_API_KEY = "ed0c2c977c8b4f69b8d2b11a0b7c05e7";
 
     private static WalletInterface mWalletInterface;
 
@@ -109,7 +109,8 @@ public class CryptoAPIHelper {
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    public void sendAPIRequest(String url, final Web3Enum type, String callType, final String tokenSymbol, final TransactionCallback callback, final ConfigureTrxCallback gasCallback) {
+    public void sendAPIRequest(String url, final Web3Enum type, String callType, final String tokenSymbol,
+                final TransactionCallback callback, final ConfigureTrxCallback gasCallback, String decimals) {
         new AsyncTask<String>() {
             @Override
             protected String doInBackground() {
@@ -182,11 +183,14 @@ public class CryptoAPIHelper {
                             JSONArray resultArray = jsonresult.getJSONArray("result");
                             ArrayList<TransactionObj> mTransactionArray = new ArrayList<TransactionObj>();
 
+                            BigDecimal decimalPlaces = new BigDecimal(decimals);
+
                             for (int i = 0; i != resultArray.length(); i++) {
                                 JSONObject trxItem = resultArray.getJSONObject(i);
 
                                 BigDecimal trxAmount = new BigDecimal(trxItem.getString("value"));
-                                BigDecimal wei = new BigDecimal(1000000000000000000l);
+                                BigDecimal wei = BigDecimal.TEN.pow(decimalPlaces);
+
                                 MathContext mc = new MathContext(6);
                                 trxAmount = trxAmount.divide(wei, mc);
 
@@ -213,41 +217,49 @@ public class CryptoAPIHelper {
                     case BNB_BALANCE:
                     case ETH_BALANCE:
                         try {
+                            BigDecimal decimalPlaces = new BigDecimal(decimals);
+
                             JSONObject jsonObjectBalance = new JSONObject(result);
                             String balance = jsonObjectBalance.getString("result");
                             BigDecimal balanceB = new BigDecimal(balance);
-                            BigDecimal wei = new BigDecimal(1000000000000000000l);
+                            BigDecimal wei = BigDecimal.TEN.pow(decimalPlaces);
 
                             MathContext mc = new MathContext(6);
 
                             balanceB = balanceB.divide(wei, mc);
 
-                            // divide by 1000000000000000000 because api returns Wei
+                            // divide by token decimals
 
-                            balanceB = balanceB.setScale(6, BigDecimal.ROUND_HALF_DOWN);
+                            balanceB = balanceB.setScale(8, BigDecimal.ROUND_HALF_DOWN);
                             balance = balanceB.toString();
+
+                            // strip tailing zeros
+                            java.math.BigDecimal balanceNoTrailing = new java.math.BigDecimal(balance);
+                            balanceNoTrailing = balanceNoTrailing.stripTrailingZeros();
+                            balance = balanceNoTrailing.toPlainString();
+
                             mWalletInterface.onUpdatedBalance(tokenSymbol, balance);
                         } catch (Exception ignore) { }
                         break;
-                    case BTC_BALANCE:
-                        try {
-                            JSONObject jsonObjectBalance = new JSONObject(result);
-                            String balance = jsonObjectBalance.getString("final_balance");
-                            BigDecimal balanceB = new BigDecimal(balance);
-                            BigDecimal wei = new BigDecimal(100000000l);
-
-                            MathContext mc = new MathContext(6);
-
-                            balanceB = balanceB.divide(wei, mc);
-
-                            // divide by 100000000 because api response format
-
-                            balanceB = balanceB.setScale(6, BigDecimal.ROUND_HALF_DOWN);
-                            balance = balanceB.toString();
-
-                            mWalletInterface.onUpdatedBalance("BTC", balance);
-                        } catch (Exception ignore) { }
-                        break;
+                    // case BTC_BALANCE:
+                    //     try {
+                    //         JSONObject jsonObjectBalance = new JSONObject(result);
+                    //         String balance = jsonObjectBalance.getString("final_balance");
+                    //         BigDecimal balanceB = new BigDecimal(balance);
+                    //         BigDecimal wei = new BigDecimal(100000000l);
+                    //
+                    //         MathContext mc = new MathContext(6);
+                    //
+                    //         balanceB = balanceB.divide(wei, mc);
+                    //
+                    //         // divide by 100000000 because api response format
+                    //
+                    //         balanceB = balanceB.setScale(6, BigDecimal.ROUND_HALF_DOWN);
+                    //         balance = balanceB.toString();
+                    //
+                    //         mWalletInterface.onUpdatedBalance("BTC", balance);
+                    //     } catch (Exception ignore) { }
+                    //     break;
                     case BEP_PRICE:
                     case ERC_PRICE:
                     case BNB_PRICE:
@@ -267,35 +279,35 @@ public class CryptoAPIHelper {
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    public void getEthBalance(String address) {
+    public void getEthBalance(String address, String decimals) {
         String url = "https://api.etherscan.io/api?module=account&action=balance&address=" + address
         + "&tag=latest&apikey=" + ETHERSCAN_API_KEY;
 
-        sendAPIRequest(url, Web3Enum.ETH_BALANCE, "POST", "ETH", null, null);
+        sendAPIRequest(url, Web3Enum.ETH_BALANCE, "POST", "ETH", null, null, decimals);
     }
-    public void getBNBBalance(String address) {
+    public void getBNBBalance(String address, String decimals) {
         String url = "https://api.bscscan.com/api?module=account&action=balance&address=" + address
         + "&apikey=" + BSCSCAN_API_KEY;
 
-        sendAPIRequest(url, Web3Enum.BNB_BALANCE, "POST", "BSC", null, null);
+        sendAPIRequest(url, Web3Enum.BNB_BALANCE, "POST", "BSC", null, null, decimals);
     }
 
-    public void getBEPBalance(String contractAddress, String address, String tokenSymbol) {
+    public void getBEPBalance(String contractAddress, String address, String tokenSymbol, String decimals) {
         String url = "https://api.bscscan.com/api?module=account&action=tokenbalance&contractaddress="
         + contractAddress
         + "&address=" + address
         + "&tag=latest&apikey=" + BSCSCAN_API_KEY;
 
-        sendAPIRequest(url, Web3Enum.BEP_BALANCE, "POST", tokenSymbol, null, null);
+        sendAPIRequest(url, Web3Enum.BEP_BALANCE, "POST", tokenSymbol, null, null, decimals);
     }
 
-    public void getERCBalance(String contractaddress, String address, String tokenSymbol) {
-        String url = "https://api.etherscan.io/api?module=account&action=tokennfttx&contractaddress="
+    public void getERCBalance(String contractaddress, String address, String tokenSymbol, String decimals) {
+        String url = "https://api.etherscan.io/api?module=account&action=tokenbalance&contractaddress="
         + contractaddress
         + "&address=" + address
         + "&sort=desc&apikey=" + ETHERSCAN_API_KEY;
 
-        sendAPIRequest(url, Web3Enum.ERC_BALANCE, "POST", tokenSymbol, null, null);
+        sendAPIRequest(url, Web3Enum.ERC_BALANCE, "POST", tokenSymbol, null, null, decimals);
     }
 
     public void getERCPrice(String tokenSymbol, String contractAddress) {
@@ -322,28 +334,28 @@ public class CryptoAPIHelper {
         sendAPIRequestBody(url, Web3Enum.BEP_PRICE, "POST", tokenSymbol, body, null);
     }
 
-    public void getBTCBalance(String address) {
-        String url = "https://api.blockcypher.com/v1/btc/main/addrs/" + address + "/balance";
-
-        sendAPIRequest(url, Web3Enum.BTC_BALANCE, "GET", "BTC", null, null);
-    }
+    // public void getBTCBalance(String address) {
+    //     String url = "https://api.blockcypher.com/v1/btc/main/addrs/" + address + "/balance";
+    //
+    //     sendAPIRequest(url, Web3Enum.BTC_BALANCE, "GET", "BTC", null, null, null);
+    // }
 
     public void getEthPrice() {
         String url = "https://api.coinbase.com/v2/exchange-rates?currency=ETH";
 
-        sendAPIRequest(url, Web3Enum.ETH_PRICE, "GET", "ETH", null, null);
+        sendAPIRequest(url, Web3Enum.ETH_PRICE, "GET", "ETH", null, null, null);
     }
 
     public void getBNBPrice() {
         String url = "https://api.coinbase.com/v2/exchange-rates?currency=BNB";
 
-        sendAPIRequest(url, Web3Enum.BNB_PRICE, "GET", "BSC", null, null);
+        sendAPIRequest(url, Web3Enum.BNB_PRICE, "GET", "BSC", null, null, null);
     }
 
     public void getBTCPrice() {
         String url = "https://api.coinbase.com/v2/exchange-rates?currency=BTC";
 
-        sendAPIRequest(url, Web3Enum.BTC_PRICE, "GET", "BTC", null, null);
+        sendAPIRequest(url, Web3Enum.BTC_PRICE, "GET", "BTC", null, null, null);
     }
 
     public void getTokenNonce(String tokenType, String address, String tokenSymbol) {
@@ -364,11 +376,11 @@ public class CryptoAPIHelper {
                     + "&tag=latest&apikey="
                     + apiKey;
 
-        sendAPIRequest(url, Web3Enum.TOKEN_NONCE, "POST", tokenSymbol, null, null);
+        sendAPIRequest(url, Web3Enum.TOKEN_NONCE, "POST", tokenSymbol, null, null, null);
     }
 
 
-    public void getERCTrx(String address, String contractAddress, String ticker) {
+    public void getERCTrx(String address, String contractAddress, String ticker, String decimals) {
         String url = "https://api.etherscan.io/api?module=account&action=tokentx&contractaddress="
         + contractAddress
         + "&address="
@@ -376,10 +388,10 @@ public class CryptoAPIHelper {
         + "&page=1&offset=20&sort=desc&apikey="
         + ETHERSCAN_API_KEY;
 
-        sendAPIRequest(url, Web3Enum.GET_ETH_TRX, "POST", ticker, null, null);
+        sendAPIRequest(url, Web3Enum.GET_ETH_TRX, "POST", ticker, null, null, decimals);
     }
 
-    public void getBEPTrx(String address, String contractAddress, String ticker) {
+    public void getBEPTrx(String address, String contractAddress, String ticker, String decimals) {
         String url = "https://api.bscscan.com/api?module=account&action=tokentx&contractaddress="
         + contractAddress
         + "&address="
@@ -387,28 +399,25 @@ public class CryptoAPIHelper {
         + "&page=1&offset=20&apikey="
         + BSCSCAN_API_KEY;
 
-        sendAPIRequest(url, Web3Enum.GET_BEP_TRX, "POST", ticker, null, null);
+        sendAPIRequest(url, Web3Enum.GET_BEP_TRX, "POST", ticker, null, null, decimals);
     }
 
-    public void getBSCETHTrx(String address, boolean isEth, String ticker) {
+    public void getBSCETHTrx(String address, boolean isEth, String ticker, String decimals) {
         String url = (isEth ? "https://api.etherscan.io" : "https://api.bscscan.com")
         + "/api?module=account&action=txlist&address="
         + address
         + "&page=1&offset=20&sort=desc&apikey="
         + (isEth ? ETHERSCAN_API_KEY : BSCSCAN_API_KEY);
 
-        sendAPIRequest(url, (isEth ? Web3Enum.GET_ETH_TRX : Web3Enum.GET_BEP_TRX), "POST", ticker, null, null);
+        sendAPIRequest(url, (isEth ? Web3Enum.GET_ETH_TRX : Web3Enum.GET_BEP_TRX), "POST", ticker, null, null, decimals);
     }
 
     public void getTokenGasEstimate(String tokenType, String data, String recipient, String amount, ConfigureTrxCallback callback) {
         String url = (tokenType.equals("BEP20") ? "https://api.bscscan.com/api" : "https://api.etherscan.io/api")
-          + "?module=proxy&action=eth_estimateGas"
-          + "&data=" + data
-          + "&to=" + recipient
-          + "&value=" + amount
-          + "&apikey=" + (tokenType.equals("BEP20") ? BSCSCAN_API_KEY : ETHERSCAN_API_KEY);
+            + "?module=gastracker&action=gasoracle&apikey="
+            + (tokenType.equals("BEP20") ? BSCSCAN_API_KEY : ETHERSCAN_API_KEY);
 
-        sendAPIRequest(url, Web3Enum.TRX_GAS_ESTIMATE, "POST", "", null, callback);
+        sendAPIRequest(url, Web3Enum.TRX_GAS_ESTIMATE, "POST", "", null, callback, null);
     }
 
     public void checkGasPrice(String gas, ConfigureTrxCallback callback, CoinType coinType) {
@@ -418,7 +427,7 @@ public class CryptoAPIHelper {
         + "&apikey="
         + (coinType == CoinType.ETHEREUM ? ETHERSCAN_API_KEY : BSCSCAN_API_KEY);
 
-        sendAPIRequest(url, Web3Enum.ETH_GAS_CHECK, "POST", "", null, callback);
+        sendAPIRequest(url, Web3Enum.ETH_GAS_CHECK, "POST", "", null, callback, null);
     }
 
     public void sendTransaction(String chainType, String hexString, String tokenSymbol, TransactionCallback callback) {

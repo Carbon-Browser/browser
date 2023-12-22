@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:gravity="center_vertical"
+    android:animateLayoutChanges="true"
+    android:background="#1E1E1E">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@android:color/white"
+        android:gravity="center"
+        android:text="Transaction Details"
+        android:layout_marginBottom="12dp"
+        tools:ignore="HardcodedText" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/site_url"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#E1E1E1"
+            android:lines="1"
+            android:ellipsize="end"
+            android:textStyle="bold"
+            android:textSize="12sp"
+            android:text="https://example.com"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:id="@+id/chain_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#a4a4a4"
+            android:gravity="end"
+            android:lines="1"
+            android:ellipsize="end"
+            android:textStyle="bold"
+            android:textSize="12sp"
+            android:text="Ethereum Mainnet"
+            tools:ignore="HardcodedText" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="10dp"
+        android:layout_marginTop="40dp"
+        android:orientation="vertical">
+
+        <!--    data    -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Data"
+                android:textColor="@android:color/white"
+                tools:ignore="HardcodedText" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"/>
+
+            <TextView
+                android:id="@+id/data_value"
+                android:maxWidth="180dp"
+                android:lines="1"
+                android:ellipsize="end"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="0x000000000000000000000000000000000000000000"
+                android:textColor="@android:color/white"
+                tools:ignore="HardcodedText" />
+
+            <Button
+                android:id="@+id/data_button_copy"
+                android:layout_width="22dp"
+                android:background="@drawable/ic_clipboard"
+                android:layout_gravity="center_vertical"
+                android:backgroundTint="@android:color/white"
+                android:layout_height="22dp"/>
+        </LinearLayout>
+
+        <!--   gas   -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Gas"
+                android:textColor="@android:color/white"
+                tools:ignore="HardcodedText" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"/>
+
+            <ProgressBar
+                android:id="@+id/gas_value_loader"
+                android:layout_gravity="end"
+                android:layout_width="20dp"
+                android:indeterminateTint="#ff5a07"
+                android:layout_height="20dp"/>
+            <TextView
+                android:id="@+id/gas_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:lines="1"
+                android:ellipsize="end"
+                android:gravity="end"
+                android:text="492932"
+                android:visibility="gone"
+                android:textColor="@android:color/white"/>
+        </LinearLayout>
+
+        <!--    max fee    -->
+        <LinearLayout
+            android:id="@+id/gas_price_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Max gas fee"
+                android:textColor="@android:color/white"
+                tools:ignore="HardcodedText" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"/>
+
+            <TextView
+                android:id="@+id/max_gas_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:lines="1"
+                android:ellipsize="end"
+                android:gravity="end"
+                android:text="492932"
+                android:textColor="@android:color/white"/>
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="end|bottom"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="60dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="45dp"
+            android:text="IGNORE"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingVertical="10dp"
+            android:paddingHorizontal="20dp"
+            android:gravity="center_vertical"
+            android:textColor="@android:color/white"
+            android:background="@android:color/transparent"
+            android:id="@+id/button_negative"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="45dp"
+            android:text="APPROVE"
+            android:textColor="#a4a4a4"
+            android:textSize="14sp"
+            android:paddingVertical="10dp"
+            android:paddingHorizontal="20dp"
+            android:textStyle="bold"
+            android:enabled="false"
+            android:gravity="center_vertical"
+            android:layout_marginStart="16dp"
+            android:background="@android:color/transparent"
+            android:id="@+id/button_positive"
+            tools:ignore="HardcodedText" />
+    </LinearLayout>
+</LinearLayout>

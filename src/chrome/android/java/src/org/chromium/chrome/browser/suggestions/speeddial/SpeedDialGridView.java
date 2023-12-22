@@ -17,9 +17,6 @@ import org.chromium.chrome.browser.suggestions.speeddial.helper.SimpleItemTouchH
 import org.chromium.chrome.browser.suggestions.speeddial.SpeedDialInteraction;
 import org.chromium.chrome.R;
 
-/**
- * @author Paul Burke (ipaulpro)
- */
 public class SpeedDialGridView extends RecyclerView implements OnStartDragListener {
 
     private ItemTouchHelper mItemTouchHelper;
@@ -52,13 +49,13 @@ public class SpeedDialGridView extends RecyclerView implements OnStartDragListen
         mItemTouchHelper.startDrag(viewHolder);
     }
 
-    public void updateTileTextTint() {
+    public void updateTileTextTint(boolean isDark) {
         SpeedDialAdapter adapter = (SpeedDialAdapter) getAdapter();
-        adapter.updateTileTextTint();
+        adapter.updateTileTextTint(isDark);
     }
 
-    public void setDark() {
+    public void setDark(boolean isDark) {
         SpeedDialAdapter adapter = (SpeedDialAdapter) getAdapter();
-        adapter.setDark();
+        adapter.setDark(isDark);
     }
 }
