@@ -14,16 +14,17 @@ import wallet.core.jni.CoinType;
 public class TokenDatabase extends SQLiteOpenHelper {
 
     private ArrayList<TokenObj> mTokenArray = new ArrayList<TokenObj>() {{
-        add(new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_carbon.png", "Carbon", "0.00", "0", "CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206", "BEP20"));
+        add(new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_carbon.png", "Carbon", "0.00", "0", "CSIX", "0x04756126f044634c9a0f0e985e60c88a51acc206", "BEP20", "18"));
         // add(new TokenObj(CoinType.BITCOIN, R.drawable.crypto_logo_bitcoin, "Bitcoin", "0.00", "0", "BTC", ""));
         add(new TokenObj(CoinType.SMARTCHAIN, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_binance.png", "Binance Smart Chain", "0.00", "0", "BSC", "BEP20"));
         add(new TokenObj(CoinType.ETHEREUM, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_ethereum.png", "Ethereum", "0.00", "0", "ETH", "ERC20"));
+        add(new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/crypto_logo_usdtbep20.png", "Tether USD", "0.00", "0", "USDT", "0x55d398326f99059fF775485246999027B3197955", "BEP20", "18"));
     }};
 
     // All Static variables
     // Database Version
     // !-- If you change the database schema, must increment the database version --!
-    private static final int DATABASE_VERSION = 16;
+    private static final int DATABASE_VERSION = 18;
 
     // Database Name
     private static final String DATABASE_NAME = "cw_db";
@@ -41,6 +42,7 @@ public class TokenDatabase extends SQLiteOpenHelper {
     private final String KEY_TOKEN_CONTRACT_ADDRESS = "tokenContractAddress";
     private final String KEY_TOKEN_CHAIN_NAME = "tokenChainName";
     private final String KEY_HIGHEST_LATEST_NONCE = "tokenNonce";
+    private final String KEY_DECIMALS = "tokenDecimals";
 
     private final String KEY_TIMESTAMP = "trxTimestamp";
     private final String KEY_AMOUNT = "trxAmount";
@@ -74,7 +76,8 @@ public class TokenDatabase extends SQLiteOpenHelper {
                 + KEY_TOKEN_SYMBOL + " VARCHAR PRIMARY KEY,"
                 + KEY_TOKEN_CONTRACT_ADDRESS + " VARCHAR,"
                 + KEY_TOKEN_CHAIN_NAME + " VARCHAR,"
-                + KEY_HIGHEST_LATEST_NONCE + " VARCHAR"
+                + KEY_HIGHEST_LATEST_NONCE + " VARCHAR,"
+                + KEY_DECIMALS + " VARCHAR"
                 + ")";
         db.execSQL(CREATE_WALLET_TABLE);
 
@@ -93,8 +96,8 @@ public class TokenDatabase extends SQLiteOpenHelper {
         for (int i = 0; i != mTokenArray.size(); i++) {
             TokenObj tokenObj = mTokenArray.get(i);
 
-            String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + ","+ KEY_HIGHEST_LATEST_NONCE + ")";
-            String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" +tokenObj.chainName + "','" + "0" + "')";
+            String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + ","+ KEY_HIGHEST_LATEST_NONCE + "," + KEY_DECIMALS + ")";
+            String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" +tokenObj.chainName + "','" + "0" + "','" + tokenObj.decimals + "')";
             String query = "INSERT INTO "
                     + TABLE_CW
                     + COLUMNS
@@ -116,13 +119,47 @@ public class TokenDatabase extends SQLiteOpenHelper {
     // Upgrading database
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Drop older table if existed
-        db.execSQL("DROP TABLE IF EXISTS " + TABLE_CW);
+        // try deleting the database, re-writing the tokens with the new decimal field.. if error occurs just do total wipe
 
-        db.execSQL("DROP TABLE IF EXISTS " + TABLE_TRX);
+        try {
+          ArrayList<TokenObj> mTempTokenArray = internalGetTokenList(db);
 
-        // Create tables again
-        onCreate(db);
+          // Drop older table if existed
+          db.execSQL("DROP TABLE IF EXISTS " + TABLE_CW);
+
+          // Create tables again
+          String CREATE_WALLET_TABLE = "CREATE TABLE " + TABLE_CW + "("
+                  + KEY_TOKEN_ICON_URL + " VARCHAR,"
+                  + KEY_TOKEN_NAME + " VARCHAR,"
+                  + KEY_TOKEN_USD_VALUE + " VARCHAR,"
+                  + KEY_TOKEN_BALANCE + " VARCHAR,"
+                  + KEY_TOKEN_SYMBOL + " VARCHAR PRIMARY KEY,"
+                  + KEY_TOKEN_CONTRACT_ADDRESS + " VARCHAR,"
+                  + KEY_TOKEN_CHAIN_NAME + " VARCHAR,"
+                  + KEY_HIGHEST_LATEST_NONCE + " VARCHAR,"
+                  + KEY_DECIMALS + " VARCHAR"
+                  + ")";
+          db.execSQL(CREATE_WALLET_TABLE);
+
+          for (int i = 0; i != mTempTokenArray.size(); i++) {
+              TokenObj tokenObj = mTempTokenArray.get(i);
+
+              String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + ","+ KEY_HIGHEST_LATEST_NONCE + "," + KEY_DECIMALS + ")";
+              String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" +tokenObj.chainName + "','" + "0" + "','" + tokenObj.decimals + "')";
+              String query = "INSERT INTO "
+                      + TABLE_CW
+                      + COLUMNS
+                      + VALUES;
+
+              db.execSQL(query);
+          }
+        } catch (Exception e) {
+          db.execSQL("DROP TABLE IF EXISTS " + TABLE_CW);
+
+          db.execSQL("DROP TABLE IF EXISTS " + TABLE_TRX);
+
+          onCreate(db);
+        }
     }
 
     public void addAndReplaceTrx(ArrayList<TransactionObj> trxArray) {
@@ -266,8 +303,8 @@ public class TokenDatabase extends SQLiteOpenHelper {
             SQLiteDatabase db = getWritableDatabase();
 
             try {
-                String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + "," + KEY_HIGHEST_LATEST_NONCE + ")";
-                String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" + tokenObj.chainName + "','" + "0" + "')";
+                String COLUMNS = " (" + KEY_TOKEN_ICON_URL + "," + KEY_TOKEN_NAME + "," + KEY_TOKEN_USD_VALUE + "," + KEY_TOKEN_BALANCE + "," + KEY_TOKEN_SYMBOL + "," + KEY_TOKEN_CONTRACT_ADDRESS + "," + KEY_TOKEN_CHAIN_NAME + "," + KEY_HIGHEST_LATEST_NONCE + "," + KEY_DECIMALS + ")";
+                String VALUES = " VALUES('" + tokenObj.iconUrl + "','" + tokenObj.name + "','" + tokenObj.usdValue + "','" + tokenObj.balance + "','" + tokenObj.ticker + "','" + tokenObj.chain + "','" + tokenObj.chainName + "','" + "0" + "','" + tokenObj.decimals + "')";
                 String query = "INSERT OR REPLACE INTO "
                         + TABLE_CW
                         + COLUMNS
@@ -301,16 +338,57 @@ public class TokenDatabase extends SQLiteOpenHelper {
                         String chain = cursor.getString(5);
                         String chainName = cursor.getString(6);
 
+                        String decimals = cursor.getString(8);
+
                         boolean isCustom = !chain.equals("null");
 
-                        // Add to list
-                        TokenObj item = new TokenObj(isCustom, iconUrl, name, usdValue, balance, ticker, chain, chainName);
+                        TokenObj item = new TokenObj(isCustom, iconUrl, name, usdValue, balance, ticker, chain, chainName, decimals);
 
                         tokenList.add(item);
                     } while (cursor.moveToNext());
                 }
 
                 db.close();
+                cursor.close();
+            } catch (Exception ignore) {
+
+            }
+        }
+
+        // return list
+        return tokenList;
+    }
+
+    // used when upgrading the database only (decimals is hardcoded since thats a new field we're adding)
+    public ArrayList<TokenObj> internalGetTokenList(SQLiteDatabase db) {
+        ArrayList<TokenObj> tokenList = new ArrayList<>();
+
+        synchronized (sInstance) {
+            try {
+                // Select All Query
+                String selectQuery = "SELECT * FROM " + TABLE_CW;
+
+                Cursor cursor = db.rawQuery(selectQuery, null);
+
+                // looping through all rows and adding to list
+                if (cursor.moveToFirst()) {
+                    do {
+                        String iconUrl = cursor.getString(0);
+                        String name = cursor.getString(1);
+                        String usdValue = cursor.getString(2);
+                        String balance = cursor.getString(3);
+                        String ticker = cursor.getString(4);
+                        String chain = cursor.getString(5);
+                        String chainName = cursor.getString(6);
+
+                        boolean isCustom = !chain.equals("null");
+
+                        TokenObj item = new TokenObj(isCustom, iconUrl, name, usdValue, balance, ticker, chain, chainName, "18");
+
+                        tokenList.add(item);
+                    } while (cursor.moveToNext());
+                }
+
                 cursor.close();
             } catch (Exception ignore) {
 

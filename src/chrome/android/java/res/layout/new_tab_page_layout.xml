@@ -386,23 +386,38 @@
                 android:background="@drawable/ntp_rounded_background"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/featured_daps_textview"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="sans-serif"
-                    android:textStyle="bold"
-                    android:textColor="@android:color/white"
-                    android:layout_marginBottom="10dp"
-                    android:layout_marginTop="14dp"
-                    android:textSize="14sp"
-                    android:text="@string/featured_daps"
-                    android:layout_gravity="center" />
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        android:id="@+id/featured_daps_textview"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/white"
+                        android:layout_marginBottom="10dp"
+                        android:layout_marginTop="14dp"
+                        android:textSize="14sp"
+                        android:text="@string/featured_daps"
+                        android:layout_gravity="center" />
+
+                    <Button
+                        android:id="@+id/overflow_button_dapps"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:layout_gravity="end|center_vertical"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/ic_overflow"/>
+                </FrameLayout>
 
                 <LinearLayout
+                    android:id="@+id/featured_dapps_linearlayout_inner1"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
+                    android:visibility="gone"
                     android:orientation="horizontal">
 
                     <Space
@@ -462,9 +477,11 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/featured_dapps_linearlayout_inner2"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
+                    android:visibility="gone"
                     android:paddingBottom="20dp"
                     android:orientation="horizontal">
 
@@ -533,6 +550,7 @@
                   android:textStyle="bold"
                   android:layout_marginTop="-12dp"
                   android:paddingStart="6dp"
+                  android:visibility="gone"
                   android:paddingEnd="6dp"
                   android:paddingTop="2dp"
                   android:paddingBottom="2dp"
@@ -542,6 +560,36 @@
                   android:background="@drawable/carbon_button_bg"
                   android:text="@string/view_more_dapps"
                   android:layout_gravity="center" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/speed_dial_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+
+                    <TextView
+                        android:id="@+id/speed_dial_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif"
+                        android:textStyle="bold"
+                        android:textColor="@android:color/white"
+                        android:textSize="14sp"
+                        android:text="SPEED DIAL"
+                        android:layout_gravity="center" />
+
+                    <Button
+                        android:id="@+id/overflow_button_speed_dial"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="top|end"
+                        android:background="@drawable/ic_overflow" />
+                </FrameLayout>
             </LinearLayout>
 
             <LinearLayout
@@ -596,6 +644,14 @@
                 android:background="@drawable/carbon_button_bg"
                 android:layout_width="wrap_content"
                 android:layout_height="24dp"/>
+
+            <Button
+                android:id="@+id/overflow_button_news"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/ic_overflow"/>
             </LinearLayout>
 
             <!-- end -->

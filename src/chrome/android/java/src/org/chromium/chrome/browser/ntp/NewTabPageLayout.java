@@ -337,29 +337,132 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         earnedTodayTextView.setText(mRewardsBridge.getCreditsEarnedToday()+"");
         final TextView totalBalanceTextView = (TextView)findViewById(R.id.ntp_rewards_total);
         totalBalanceTextView.setText(mRewardsBridge.getTotalCreditBalance()+"");
-        // AppCompatImageView widgetMoreOption = findViewById(R.id.ntp_widget_more_option);
-        // if (widgetMoreOption != null) {
-        //     widgetMoreOption.setOnClickListener(new View.OnClickListener() {
-        //         @Override
-        //         public void onClick(View view) {
-        //             showPopupMenu(getContext(), view);
-        //         }
-        //     });
-        // }
-        // speed dial section
-        mSpeedDialView = SpeedDialController.inflateSpeedDial(getContext(), 4, null, false);
-        if (isDarkMode) {
-            mSpeedDialView.setDark();
-            mSpeedDialView.updateTileTextTint();
+
+        final SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+        boolean isDappsEnabled = mPrefs.getBoolean("ntp_dapps_toggle", true);
+        if (isDappsEnabled) {
+            LinearLayout mDappsLinearLayout1 = findViewById(R.id.featured_dapps_linearlayout_inner1);
+            LinearLayout mDappsLinearLayout2 = findViewById(R.id.featured_dapps_linearlayout_inner2);
+            View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
+
+            mDappsLinearLayout1.setVisibility(View.VISIBLE);
+            mDappsLinearLayout2.setVisibility(View.VISIBLE);
+            mViewMoreDappsBtn.setVisibility(View.VISIBLE);
         }
-        if(mSpeedDialView.getParent() != null) ((ViewGroup)mSpeedDialView.getParent()).removeView(mSpeedDialView);
-        mSpeedDialView.setId(R.id.ntp_speed_dial_view);
-        mMainLayout.addView(mSpeedDialView, mMainLayout.findViewById(R.id.cta_view) == null ? 2 : 3);
+
+        boolean isSpeedDialEnabled = mPrefs.getBoolean("ntp_speed_dial_toggle", true);
+        if (isSpeedDialEnabled) {
+            mSpeedDialView = SpeedDialController.inflateSpeedDial(getContext(), 4, null, false);
+            if (isDarkMode || !isDappsEnabled) {
+                mSpeedDialView.setDark(true);
+                mSpeedDialView.updateTileTextTint(true);
+            }
+            if(mSpeedDialView.getParent() != null) ((ViewGroup)mSpeedDialView.getParent()).removeView(mSpeedDialView);
+            mSpeedDialView.setId(R.id.ntp_speed_dial_view);
+
+            LinearLayout speedDialContainer = mMainLayout.findViewById(R.id.speed_dial_container);
+
+            speedDialContainer.addView(mSpeedDialView, 1);
+        }
+        Button buttonToggleSpeedDial = findViewById(R.id.overflow_button_speed_dial);
+        buttonToggleSpeedDial.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                PopupMenu popup = new PopupMenu(getContext(), buttonToggleSpeedDial);
+                popup.getMenuInflater().inflate(R.menu.menu_ntp_toggle_speed_dial, popup.getMenu());
+                popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                    public boolean onMenuItemClick(MenuItem item) {
+                        try {
+                            boolean isSpeedDialEnabled = mPrefs.getBoolean("ntp_speed_dial_toggle", true);
+                            isSpeedDialEnabled = !isSpeedDialEnabled;
+                            mPrefs.edit().putBoolean("ntp_speed_dial_toggle", isSpeedDialEnabled).apply();
+
+                            int visibility = isSpeedDialEnabled ? View.VISIBLE : View.GONE;
+                            if(mSpeedDialView != null && mSpeedDialView.getParent() != null) ((ViewGroup)mSpeedDialView.getParent()).removeView(mSpeedDialView);
+                            if (isSpeedDialEnabled) {
+                                mSpeedDialView = SpeedDialController.inflateSpeedDial(getContext(), 4, null, false);
+                                if (isDarkMode || !isDappsEnabled) {
+                                    mSpeedDialView.setDark(true);
+                                    mSpeedDialView.updateTileTextTint(true);
+                                }
+                                mSpeedDialView.setId(R.id.ntp_speed_dial_view);
+                                LinearLayout speedDialContainer = mMainLayout.findViewById(R.id.speed_dial_container);
+                                speedDialContainer.addView(mSpeedDialView, 1);
+                            }
+                        } catch (Exception ignore) {}
+                        return true;
+                    }
+                });
+                popup.show();
+            }
+        });
+
         mNewsRecyclerView = findViewById(R.id.ntp_news_recyclerview);
-        SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
         boolean isNewsEnabled = mPrefs.getBoolean("ntp_news_toggle", true);
         if (isNewsEnabled)
             getNewsArticles();
+
+        Button buttonToggleDapps = findViewById(R.id.overflow_button_dapps);
+        buttonToggleDapps.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                PopupMenu popup = new PopupMenu(getContext(), buttonToggleDapps);
+                popup.getMenuInflater().inflate(R.menu.menu_ntp_toggle_dapps, popup.getMenu());
+                popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                    public boolean onMenuItemClick(MenuItem item) {
+                        try {
+                            boolean isDappsEnabled = mPrefs.getBoolean("ntp_dapps_toggle", true);
+                            isDappsEnabled = !isDappsEnabled;
+                            mPrefs.edit().putBoolean("ntp_dapps_toggle", isDappsEnabled).apply();
+                            LinearLayout mDappsLinearLayout1 = findViewById(R.id.featured_dapps_linearlayout_inner1);
+                            LinearLayout mDappsLinearLayout2 = findViewById(R.id.featured_dapps_linearlayout_inner2);
+                            View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
+
+                            int visibility = isDappsEnabled ? View.VISIBLE : View.GONE;
+
+                            mDappsLinearLayout1.setVisibility(visibility);
+                            mDappsLinearLayout2.setVisibility(visibility);
+                            mViewMoreDappsBtn.setVisibility(visibility);
+
+                            if (mSpeedDialView == null) return true;
+
+                            if (!isDappsEnabled) {
+                                mSpeedDialView.setDark(true);
+                                mSpeedDialView.updateTileTextTint(true);
+                            } else {
+                                mSpeedDialView.setDark(isDarkMode);
+                                mSpeedDialView.updateTileTextTint(isDarkMode);
+                            }
+                        } catch (Exception ignore) {}
+                        return true;
+                    }
+                });
+                popup.show();
+            }
+        });
+
+        Button buttonToggleNews = findViewById(R.id.overflow_button_news);
+        buttonToggleNews.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                PopupMenu popup = new PopupMenu(getContext(), buttonToggleNews);
+                popup.getMenuInflater().inflate(R.menu.menu_ntp_toggle_news, popup.getMenu());
+                popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                    public boolean onMenuItemClick(MenuItem item) {
+                        boolean isNewsEnabled = mPrefs.getBoolean("ntp_news_toggle", true);
+                        isNewsEnabled = !isNewsEnabled;
+                        mPrefs.edit().putBoolean("ntp_news_toggle", isNewsEnabled).apply();
+                        if (isNewsEnabled) {
+                          getNewsArticles();
+                        } else {
+                          mNewsRecyclerView.setAdapter(null);
+                        }
+                        return true;
+                    }
+                });
+                popup.show();
+            }
+        });
 
         int variation = ExploreSitesBridge.getVariation();
         if (ExploreSitesBridge.isExperimental(variation)) {
@@ -460,6 +563,9 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
         TextView mFeaturedDappsTitle = findViewById(R.id.featured_daps_textview);
         mFeaturedDappsTitle.setTextColor(Color.parseColor(textColor));
+
+        TextView mSpeedDialTitle = findViewById(R.id.speed_dial_title);
+        mSpeedDialTitle.setTextColor(Color.parseColor(textColor));
 
         // Coming soon
         View walletTile = findViewById(R.id.coming_soon_tile1);

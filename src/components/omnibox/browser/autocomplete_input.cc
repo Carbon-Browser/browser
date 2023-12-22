@@ -25,6 +25,8 @@
 #include "url/url_canon_ip.h"
 #include "url/url_util.h"
 
+#include <regex>
+
 #if BUILDFLAG(IS_CHROMEOS)
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chromeos/crosapi/cpp/lacros_startup_state.h"  // nogncheck
@@ -538,11 +540,19 @@ metrics::OmniboxInputType AutocompleteInput::Parse(
   }
 
   //web3 domains
+  std::regex tldRegex(R"((\.\w+)$)");
+
   for (const base::StringPiece domain : {"eth", "bit", "888", "bitcoin", "blockchain",
-  "crypto", "dao", "hi", "klever", "nft", "wallet", "x", "zil"}) {
-    // The +1 accounts for a possible trailing period.
-    if (canonicalized_url->DomainIs(domain) &&
-        (canonicalized_url->host().length() > (domain.length() + 1)))
+    "crypto", "dao", "hi", "klever", "nft", "wallet", "x", "zil"}) {
+      // Check if the domain matches the predefined list
+      if (canonicalized_url->DomainIs(domain) &&
+          (canonicalized_url->host().length() > (domain.length() + 1))) {
+          return metrics::OmniboxInputType::URL;
+      }
+  }
+
+  // Check if the host part of the URL matches the '.word' pattern for handshake domains
+  if (std::regex_search(canonicalized_url->host(), tldRegex)) {
       return metrics::OmniboxInputType::URL;
   }
 

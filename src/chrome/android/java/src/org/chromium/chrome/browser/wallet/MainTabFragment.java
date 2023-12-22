@@ -92,6 +92,8 @@ public class MainTabFragment extends Fragment implements WalletDatabaseInterface
                   new Handler().postDelayed(new Runnable() {
                       @Override
                       public void run() {
+                          if (getContext() == null) return;
+
                           progressBar.setVisibility(View.GONE); // Hide the progress bar after 4 seconds
 
                           // Reset the top margin of the scrollView to 5dp after the delay
@@ -160,13 +162,17 @@ public class MainTabFragment extends Fragment implements WalletDatabaseInterface
 
     @Override
     public void onTransactionsReceived() {
-        drawTrxView();
+        try {
+            drawTrxView();
+        } catch (Exception ignore) {}
     }
 
     @Override
     public void onTokenInfoReceived() {
-        drawTokenView();
-        calculateTotal();
+        try {
+            drawTokenView();
+            calculateTotal();
+        } catch (Exception ignore) {}
     }
 
     private void calculateTotal() {

@@ -98,7 +98,9 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
                 // handle success
 
                 // add one to nonce
-                String nonce =  TokenDatabase.getInstance(getActivity()).getTokenNonce(tokenTicker);
+                String nonceTicker = chainType.equals("BEP20") ? "BSC" : "ETH";
+
+                String nonce =  TokenDatabase.getInstance(getActivity()).getTokenNonce(nonceTicker);
                 boolean shouldStoreAsHex = false;
                 BigInteger nonceBigInteger;
                 if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
@@ -114,7 +116,7 @@ public class WalletTransaction extends Fragment implements TransactionCallback {
                 }
                 nonceBigInteger = nonceBigInteger.add(BigInteger.ONE);
 
-                TokenDatabase. getInstance(getActivity()).setTokenNonce(tokenTicker, shouldStoreAsHex ? nonceBigInteger.toString(16) : nonceBigInteger.toString());
+                TokenDatabase. getInstance(getActivity()).setTokenNonce(nonceTicker, shouldStoreAsHex ? nonceBigInteger.toString(16) : nonceBigInteger.toString());
 
                 JSONObject jsonObject = new JSONObject(result);
                 externalUrl = chainType.equals("ERC20") ? "https://etherscan.io/tx/" : "https://bscscan.com/tx/";

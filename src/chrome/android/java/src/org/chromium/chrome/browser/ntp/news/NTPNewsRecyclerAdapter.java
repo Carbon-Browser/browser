@@ -244,7 +244,7 @@ public class NTPNewsRecyclerAdapter extends RecyclerView.Adapter<NTPNewsRecycler
     }
 
     private void getNewsData() {
-        final String countryEndpointUrl = "https://www.coindesk.com/arc/outboundfeeds/rss/";
+        final String countryEndpointUrl = "https://rss.app/feeds/_J7ORk9Ca44w7rT6f.xml";
         // "https://coindar.org/api/v2/events?access_token=" + mCoindarToken + "&page=1&page_size=30&sort_by=date_added&order_by=1";
         new AsyncTask<String>() {
             @Override

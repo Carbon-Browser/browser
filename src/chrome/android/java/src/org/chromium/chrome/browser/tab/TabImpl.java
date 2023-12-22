@@ -70,6 +70,17 @@ import org.chromium.ui.util.ColorUtils;
 import org.chromium.url.GURL;
 import java.net.URI;
 
+import org.chromium.ui.widget.Toast;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
+
+import android.content.Context;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Implementation of the interface {@link Tab}. Contains and manages a {@link ContentView}.
  * This class is not intended to be extended.
@@ -501,7 +512,6 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
             // Request desktop sites for large screen tablets if necessary.
             params.setOverrideUserAgent(calculateUserAgentOverrideOption());
 
-
             String bitDomain = ".bit";
             String ethDomain = ".eth";
             String[] unstoppableDomains = {
@@ -530,9 +540,18 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
 
               if (!edited) {
                 if (host.endsWith(bitDomain)) {
+                  edited = true;
                   params = new LoadUrlParams("https://" + host + ".cc");
                 } else if (host.endsWith(ethDomain)) {
+                  edited = true;
                   params = new LoadUrlParams("https://app.ens.domains/" + host + path);
+                }
+              }
+
+              if (!edited && getActivity() != null) {
+                if (mightBeHandshakeDomain(host)) {
+                    params = new LoadUrlParams("http://" + host + ".hns.to");
+                    Toast.makeText(getActivity(), "Loading Handshake domain", Toast.LENGTH_LONG).show();
                 }
               }
 
@@ -552,6 +571,20 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
         } finally {
             TraceEvent.end("Tab.loadUrl");
         }
+    }
+
+    private boolean mightBeHandshakeDomain(String url) {
+        // check if its a standard TLD
+        if (getActivity() == null) return false;
+        if (TLDUtils.getInstance(getActivity(), R.raw.standard_tld_13_12_23).isStandardTLD(url, getActivity(), R.raw.standard_tld_13_12_23)) return false;
+
+        // Regex pattern to check if URL ends with .SOMETHING
+        String patternString = "\\.[a-zA-Z0-9_]+$";
+
+        Pattern pattern = Pattern.compile(patternString);
+        Matcher matcher = pattern.matcher(url);
+
+        return matcher.find();
     }
 
     private @TabLoadStatus int loadUrlInternal(LoadUrlParams params) {

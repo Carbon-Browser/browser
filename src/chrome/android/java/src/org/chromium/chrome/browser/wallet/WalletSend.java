@@ -75,6 +75,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
     private String mCoinUSDValue;
     private String mContractAddress;
     private String mChainType;
+    private String mDecimals;
 
     private static String mRecipientAddress;
     private static String mAmount;
@@ -114,35 +115,37 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
         try {
             boolean isCustomType = mContractAddress != null && !"".equals(mContractAddress) && !"null".equals(mContractAddress);
 
-            JSONObject jsonResult = new JSONObject(result);
-            String result16 = jsonResult.getString("result");
-
-            // Remove the '0x' prefix
-            result16 = result16.startsWith("0x") ? result16.substring(2) : result16;
-
-            // Convert the hex string to a BigInteger, then to BigDecimal
-            BigDecimal amountDecimal = new BigDecimal(new BigInteger(result16, 16));
-
-            // Convert from wei to ether
             BigDecimal wei = new BigDecimal("1000000000000000000");
-            amountDecimal = amountDecimal.divide(wei);
+            BigDecimal gwei = new BigDecimal("1000000000");
 
-            amountDecimal = removeZerosAfterDecimal(amountDecimal, 5);
-
-            // Do something with amountDecimal
-            gasEditText.setText(amountDecimal.toPlainString());
-
-            BigDecimal tokenDollarValue = new BigDecimal(mCoinUSDValue);
             BigDecimal limitDefault = new BigDecimal("21000");
             BigDecimal limitCustom = new BigDecimal("180000");
 
-            BigDecimal maxFeeToken = amountDecimal.multiply(isCustomType ? limitCustom : limitDefault);
-            maxFeeToken = maxFeeToken.setScale(8, RoundingMode.HALF_UP);
-            BigDecimal maxFeeDollar = maxFeeToken.multiply(tokenDollarValue);
+            BigDecimal gasLimit = isCustomType ? limitCustom : limitDefault;
+
+            JSONObject jsonResult = new JSONObject(result).getJSONObject("result");
+            String gasPriceGwei = jsonResult.getString("ProposeGasPrice");
+
+            BigDecimal gasPriceGweiBigDecimal = new BigDecimal(gasPriceGwei);
+
+            // Convert from gwei to decimal
+            gasPriceGweiBigDecimal = gasPriceGweiBigDecimal.divide(gwei);
+
+            gasPriceGweiBigDecimal = gasPriceGweiBigDecimal.stripTrailingZeros();
+
+            // Do something with amountDecimal
+            gasEditText.setText(gasPriceGweiBigDecimal.toPlainString());
+
+            BigDecimal maxGasPrice = gasPriceGweiBigDecimal.multiply(gasLimit);
+            maxGasPrice = maxGasPrice.stripTrailingZeros();
+
+            BigDecimal tokenDollarValue = new BigDecimal(mCoinUSDValue);
+
+            BigDecimal maxFeeDollar = maxGasPrice.multiply(tokenDollarValue);
             maxFeeDollar = maxFeeDollar.setScale(3, RoundingMode.HALF_UP);
 
             String fuel = mChainType.equals("BEP20") ? "BSC" : "ETH";
-            mGasTimeEstimate.setText("Max Network Fee: $" + maxFeeDollar.toPlainString() + " / " + maxFeeToken.toPlainString() + " " + fuel);
+            mGasTimeEstimate.setText("Max Network Fee: $" + maxFeeDollar.toPlainString() + " / " + maxGasPrice.toPlainString() + " " + fuel);
 
             isValid = true;
             gasLoader.setVisibility(View.GONE);
@@ -151,10 +154,6 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             Toast.makeText(getActivity(), "Please check that all the fields are valid.", Toast.LENGTH_SHORT).show();
             gasLoader.setVisibility(View.GONE);
         }
-    }
-
-    private BigDecimal removeZerosAfterDecimal(BigDecimal number, int zerosToRemove) {
-        return number.multiply(BigDecimal.TEN.pow(zerosToRemove));
     }
 
     @Override
@@ -168,6 +167,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
             mCoinUSDValue = getArguments().getString("COIN_USD_VALUE", "");
             mContractAddress = getArguments().getString("COIN_CONTRACT_ADDRESS_KEY", "");
             mChainType = getArguments().getString("COIN_CHAIN_TYPE_KEY", "");
+            mDecimals = getArguments().getString("COIN_DECIMALS", "");
         }
 
         gasLoader = view.findViewById(R.id.gas_loader);
@@ -240,7 +240,7 @@ public class WalletSend extends Fragment implements ZXingScannerView.ResultHandl
                     Toast.makeText(getActivity(), "Please check that all the fields are valid.", Toast.LENGTH_SHORT).show();
                 } else {
                     ((WalletInterface) getActivity()).onNavigateVerifyTrx(mCoinName, mCoinIcon, mCoinIconUrl, mCoinTicker,
-                        mCoinBalance, mCoinType, mRecipientAddress, mAmount, mGas, mCoinUSDValue, mContractAddress, mChainType);
+                        mCoinBalance, mCoinType, mRecipientAddress, mAmount, mGas, mCoinUSDValue, mContractAddress, mChainType, mDecimals);
                 }
             }
         });

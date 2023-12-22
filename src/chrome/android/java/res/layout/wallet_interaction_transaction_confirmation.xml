@@ -2,51 +2,59 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="120dp"
-    android:orientation="horizontal"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
     android:padding="20dp"
-    android:gravity="center_vertical"
     android:background="#1E1E1E">
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Transaction sent!"
+        android:gravity="center"
         android:textSize="14sp"
         android:textStyle="bold"
-        android:layout_weight="1"
         android:textColor="@android:color/white"
         tools:ignore="HardcodedText" />
 
-    <TextView
-        android:id="@+id/button_negative"
+    <LinearLayout
         android:layout_width="wrap_content"
-        android:layout_height="45dp"
-        android:textColor="@android:color/white"
-        android:text="close"
-        android:gravity="center"
-        android:textAllCaps="true"
-        android:layout_weight="1"
-        android:paddingVertical="10dp"
-        android:textStyle="bold"
-        android:paddingHorizontal="10dp"
-        android:layout_marginEnd="6dp"
-        android:background="@android:color/transparent"
-        tools:ignore="HardcodedText" />
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginTop="60dp"
+        android:gravity="bottom"
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/button_positive"
-        android:layout_width="wrap_content"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:textAllCaps="true"
-        android:textStyle="bold"
-        android:paddingVertical="10dp"
-        android:paddingHorizontal="10dp"
-        android:layout_height="45dp"
-        android:background="@drawable/rounded_background_wallet_send_button"
-        android:textColor="@android:color/white"
-        android:text="View on bscscan"
-        tools:ignore="HardcodedText" />
+        <TextView
+            android:id="@+id/button_negative"
+            android:layout_width="wrap_content"
+            android:layout_height="45dp"
+            android:textColor="@android:color/white"
+            android:text="close"
+            android:gravity="center"
+            android:textAllCaps="true"
+            android:layout_weight="1"
+            android:paddingVertical="10dp"
+            android:textStyle="bold"
+            android:paddingHorizontal="20dp"
+            android:layout_marginEnd="6dp"
+            android:background="@android:color/transparent"
+            tools:ignore="HardcodedText" />
+
+        <TextView
+            android:id="@+id/button_positive"
+            android:layout_width="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:textAllCaps="true"
+            android:textStyle="bold"
+            android:paddingVertical="10dp"
+            android:paddingHorizontal="20dp"
+            android:layout_height="45dp"
+            android:background="@drawable/rounded_background_wallet_send_button"
+            android:textColor="@android:color/white"
+            android:text="View on bscscan"
+            tools:ignore="HardcodedText" />
+    </LinearLayout>
 
 </LinearLayout>

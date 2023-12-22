@@ -971,17 +971,19 @@ public class ChromeTabbedActivity extends ChromeActivity<ChromeActivityComponent
         // adding NEW_TASK flag to make sure backing from CCT brings up the caller activity,
         // and not Chrome
 
-        if (intent != null) {
             try {
+                if (intent != null) {
+
                 android.net.Uri data = intent.getData();
                 if (data != null && data.toString().startsWith("carbonwallet")) {
                     ToolbarManager toolbarManager = getToolbarManager();
                     toolbarManager.handleWalletInteraction(data.getHost());
+
+                    return;
                 }
 
-                return;
+              }
             } catch (Exception ignore) { }
-        }
 
         Intent intentForDispatching = new Intent(intent);
         intentForDispatching.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

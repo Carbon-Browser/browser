@@ -5712,7 +5712,15 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         Your Rewards Balance
       </message>
 
-
+      <message name="IDS_TOGGLE_NEWS" desc="">
+        Toggle News
+      </message>
+      <message name="IDS_TOGGLE_DAPPS" desc="">
+        Toggle dApps
+      </message>
+      <message name="IDS_TOGGLE_SPEED_DIAL" desc="">
+        Toggle Speed Dial
+      </message>
 
       <message name="IDS_VIEW_MORE_DAPPS" desc="">
         VIEW MORE
@@ -5785,6 +5793,9 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       </message>
       <message name="IDS_SHOW_NEWS_PREFERENCE" desc="">
         Show news on homepage
+      </message>
+      <message name="IDS_SHOW_SPEED_DIAL_PREFERENCE" desc="">
+        Show speed dial on homepage
       </message>
       <message name="IDS_PREFS_SECTION_AUTOFILL" desc="">
         Autofill

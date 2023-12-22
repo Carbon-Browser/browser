@@ -27,7 +27,7 @@ public interface WalletInterface {
   void onMnemonicImported(String mnemonic);
 
   void onNavigateVerifyTrx(String mCoinName, int mCoinIcon, String mCoinIconUrl, String mCoinTicker, String mCoinBalance, int mCoinType,
-          String mRecipientAddress, String mAmount, String mGas, String mCoinUSDValue, String mContractAddress, String mChainType);
+          String mRecipientAddress, String mAmount, String mGas, String mCoinUSDValue, String mContractAddress, String mChainType, String decimals);
 
   void onTrxVerified();
 

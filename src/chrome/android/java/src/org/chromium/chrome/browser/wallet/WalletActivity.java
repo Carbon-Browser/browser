@@ -24,7 +24,7 @@ import wallet.core.jni.BitcoinSigHashType;
 import wallet.core.jni.proto.Bitcoin;
 import wallet.core.jni.proto.Common;
 import wallet.core.jni.StoredKey;
-//
+
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Message;
 import java.math.BigInteger;
@@ -33,7 +33,6 @@ import wallet.core.jni.CoinType;
 import wallet.core.jni.HDWallet;
 import wallet.core.jni.PrivateKey;
 import wallet.core.jni.proto.Ethereum;
-//
 
 import org.chromium.chrome.browser.pininput.data.EncryptSharedPreferences;
 import org.chromium.chrome.browser.pininput.PinCodeFragment;
@@ -109,18 +108,18 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                 // TODO tidy this up, we don't need to store the nonce for all bep20/erc20 tokens. Just one nonce each for ethereum and smartchain
                 if (token.isCustomType) {
                     if (token.chainName.equals("BEP20")) {
-                        mCryptoAPIHelper.getBEPTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.chain, token.ticker);
-                        mCryptoAPIHelper.getTokenNonce("BEP20", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.ticker);
+                        mCryptoAPIHelper.getBEPTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.chain, token.ticker, token.decimals);
+                        mCryptoAPIHelper.getTokenNonce("BEP20", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), "BSC");
                     } else {
-                        mCryptoAPIHelper.getERCTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), token.chain, token.ticker);
-                        mCryptoAPIHelper.getTokenNonce("ERC20", mWallet.getAddressForCoin(CoinType.ETHEREUM), token.ticker);
+                        mCryptoAPIHelper.getERCTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), token.chain, token.ticker, token.decimals);
+                        mCryptoAPIHelper.getTokenNonce("ERC20", mWallet.getAddressForCoin(CoinType.ETHEREUM), "ETH");
                     }
                 } else if (token.ticker.equals("ETH")) {
-                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), true, token.ticker);
-                    mCryptoAPIHelper.getTokenNonce("ERC20", mWallet.getAddressForCoin(CoinType.ETHEREUM), token.ticker);
+                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.ETHEREUM), true, token.ticker, token.decimals);
+                    mCryptoAPIHelper.getTokenNonce("ERC20", mWallet.getAddressForCoin(CoinType.ETHEREUM), "ETH");
                 } else if (token.ticker.equals("BSC")) {
-                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), false, token.ticker);
-                    mCryptoAPIHelper.getTokenNonce("BEP20", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.ticker);
+                    mCryptoAPIHelper.getBSCETHTrx(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), false, token.ticker, token.decimals);
+                    mCryptoAPIHelper.getTokenNonce("BEP20", mWallet.getAddressForCoin(CoinType.SMARTCHAIN), "BSC");
                 } else {
                     // btc
                 }
@@ -154,8 +153,8 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     private void fetchBalance() {
         CryptoAPIHelper mCryptoAPIHelper = new CryptoAPIHelper(this);
-        mCryptoAPIHelper.getEthBalance(mWallet.getAddressForCoin(CoinType.ETHEREUM));
-        mCryptoAPIHelper.getBNBBalance(mWallet.getAddressForCoin(CoinType.SMARTCHAIN)); // BSC uses eth smart contracts
+        mCryptoAPIHelper.getEthBalance(mWallet.getAddressForCoin(CoinType.ETHEREUM), "18");
+        mCryptoAPIHelper.getBNBBalance(mWallet.getAddressForCoin(CoinType.SMARTCHAIN), "18"); // BSC uses eth smart contracts
 
         ArrayList<TokenObj> mTokenArray = getTokenList();
         try {
@@ -163,9 +162,9 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                 TokenObj token = mTokenArray.get(i);
                 if (token.isCustomType) {
                     if (token.chainName.equals("BEP20")) {
-                        mCryptoAPIHelper.getBEPBalance(token.chain, mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.ticker);
+                        mCryptoAPIHelper.getBEPBalance(token.chain, mWallet.getAddressForCoin(CoinType.SMARTCHAIN), token.ticker, token.decimals);
                     } else {
-                        mCryptoAPIHelper.getERCBalance(token.chain, mWallet.getAddressForCoin(CoinType.ETHEREUM), token.ticker);
+                        mCryptoAPIHelper.getERCBalance(token.chain, mWallet.getAddressForCoin(CoinType.ETHEREUM), token.ticker, token.decimals);
                     }
                 }
             }
@@ -269,13 +268,14 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
             final CoinType coinType = mPendingTrx.chainType.equals("BEP20") ? CoinType.SMARTCHAIN : CoinType.ETHEREUM;
             boolean isTokenCustomType = mPendingTrx.contractAddress != null && !"".equals(mPendingTrx.contractAddress) && !"null".equals(mPendingTrx.contractAddress);
 
-            if (coinType == CoinType.BITCOIN) {
-
-            } else {
+            // if (coinType == CoinType.BITCOIN) {
+            //
+            // } else {
                 final PrivateKey secretPrivateKey = mWallet.getKeyForCoin(coinType);
                 final String receiverAddress = mPendingTrx.recipient;
 
                 final BigDecimal wei = new BigDecimal("1000000000000000000");
+                final BigDecimal tokenDecimals = BigDecimal.TEN.pow(Integer.parseInt(mPendingTrx.decimals));
                 final BigInteger gasLimitMax = new BigInteger(isTokenCustomType ? "180000" : "21000");
 
                 BigDecimal gasDecimal = new BigDecimal(mPendingTrx.gas);
@@ -284,7 +284,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                 BigInteger gas = gasDecimal.toBigInteger();
 
                 BigDecimal amountDecimal = new BigDecimal(mPendingTrx.tokenAmount);
-                amountDecimal = amountDecimal.multiply(wei);
+                amountDecimal = amountDecimal.multiply(tokenDecimals);
                 BigInteger amount = amountDecimal.toBigInteger();
 
                 String gasString = gas.toString(16);
@@ -292,7 +292,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
                 Ethereum.SigningInput.Builder signerInputBuilder = Ethereum.SigningInput.newBuilder();
 
-                String nonce =  TokenDatabase.getInstance(this).getTokenNonce(mPendingTrx.tokenTicker);
+                String nonce =  TokenDatabase.getInstance(this).getTokenNonce(mPendingTrx.chainType.equals("BEP20") ? "BSC" : "ETH");
 
                 BigInteger nonceBigInteger;
                 if (nonce.length() == 1 && Character.isDigit(nonce.charAt(0))) {
@@ -343,7 +343,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
                     Ethereum.SigningOutput signerOutput = (Ethereum.SigningOutput)AnySigner.sign((Message)signerInput, coinType, Ethereum.SigningOutput.parser());
                     mCryptoAPIHelper.sendTransaction(mPendingTrx.chainType, toHexString(signerOutput.getEncoded().toByteArray(), true),  mPendingTrx.tokenTicker, callback);
                 }
-            }
+            // }
         } catch (Exception e) {
 
         }
@@ -449,6 +449,7 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
         walletSendBundle.putInt("COIN_TYPE_KEY", coinType);
         walletSendBundle.putString("COIN_CONTRACT_ADDRESS_KEY", tokenObj.chain);
         walletSendBundle.putString("COIN_CHAIN_TYPE_KEY", tokenObj.chainName);
+        walletSendBundle.putString("COIN_DECIMALS", tokenObj.decimals);
 
         WalletSend mWalletSendFragment = new WalletSend();
         mWalletSendFragment.setArguments(walletSendBundle);
@@ -576,13 +577,13 @@ public class WalletActivity extends ChromeBaseAppCompatActivity implements Walle
 
     @Override
     public void onNavigateVerifyTrx(String mCoinName, int mCoinIcon, String mCoinIconUrl, String mCoinTicker, String mCoinBalance, int mCoinType,
-                                    String mRecipientAddress, String mAmount, String mGas, String mCoinUSDValue, String mContractAddress, String mChainType) {
+                                    String mRecipientAddress, String mAmount, String mGas, String mCoinUSDValue, String mContractAddress, String mChainType, String mDecimals) {
 
         Long datel = System.currentTimeMillis()/1000;
         String date = datel.toString();
 
         mPendingTrx = new TrxObj(mCoinIcon, mCoinIconUrl, mCoinUSDValue, mAmount, date, "",
-                mContractAddress, false, mChainType, mRecipientAddress, 1, mCoinName, mCoinType, mGas, mCoinTicker);
+                mContractAddress, false, mChainType, mRecipientAddress, 1, mCoinName, mCoinType, mGas, mCoinTicker, mDecimals);
 
         Bundle verifyTrxBundle = new Bundle();
         verifyTrxBundle.putString("PIN_CODE_KEY", mPinCode);

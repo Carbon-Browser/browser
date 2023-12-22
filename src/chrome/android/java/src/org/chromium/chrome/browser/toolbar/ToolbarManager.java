@@ -268,7 +268,10 @@ import org.chromium.chrome.browser.wallet.TokenDatabase;
 
 import java.security.NoSuchAlgorithmException;
 import org.chromium.chrome.browser.wallet.CryptoAPIHelper;
+
+import org.bouncycastle.crypto.digests.KeccakDigest;
 import org.bouncycastle.jcajce.provider.digest.Keccak;
+import org.bouncycastle.util.encoders.Hex;
 
 import 	android.widget.ProgressBar;
 import android.content.ClipData;
@@ -834,6 +837,8 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
             @Override
             public void onPageLoadFinished(final Tab tab, GURL url) {
+                // initInjection(tab);
+
                 // Part of scroll jank investigation http://crbug.com/1311003. Will remove
                 // TraceEvent after the investigation is complete.
                 try (TraceEvent te = TraceEvent.scoped("ToolbarManager::onPageLoadFinished")) {
@@ -971,28 +976,13 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                 if (navigation.hasCommitted() && navigation.isInPrimaryMainFrame()
                         && !navigation.isSameDocument()) {
                     mToolbar.onNavigatedToDifferentPage();
+                    try {
+                        String url = tab.getUrl().getSpec();
+                        if (!url.contains("chrome://") && !url.contains("carbon://") && !url.contains("chrome-native://") && !url.contains("carbon-native://")) {
+                            initInjection(tab);
+                        }
+                    } catch (Exception ignore) {}
                 }
-
-                try {
-                  String trustMin = loadJs(R.raw.trust_min, mActivity);
-                  int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
-
-                  String initJs = loadInitJs(chainId, "https://bsc-dataseed2.binance.org");
-
-                  if (tab.getUrl().getSpec().contains("carbon.website") || tab.getUrl().getSpec().contains("lido.fi")) {
-                      // Create a new Handler
-                      new Handler().postDelayed(new Runnable() {
-                          @Override
-                          public void run() {
-                              tab.getWebContents().evaluateJavaScript(trustMin, null);
-                              tab.getWebContents().evaluateJavaScript(initJs, null);
-                          }
-                      }, 1500); // Delay in milliseconds (1000ms = 1 second)
-                  } else {
-                      tab.getWebContents().evaluateJavaScript(trustMin, null);
-                      tab.getWebContents().evaluateJavaScript(initJs, null);
-                  }
-                } catch (Exception ignore) {}
 
                 // If the load failed due to a different navigation, there is no need to reset the
                 // location bar animations.
@@ -1164,22 +1154,74 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         TraceEvent.end("ToolbarManager.ToolbarManager");
     }
 
+    private void initInjection(Tab tab) {
+        try {
+          String trustMin = loadJs(R.raw.trust_min, mActivity);
+          int chainId = (authorizedHost !=  null && authorizedHost.contains(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
+
+          String initJs = loadInitJs(chainId, chainId == 56 ? "https://bsc-dataseed2.binance.org" : "https://ethereum.publicnode.com");
+
+          if (tab.getUrl().getSpec().contains("carbon.website") || tab.getUrl().getSpec().contains("lido.fi")) {
+              // Create a new Handler
+              new Handler().postDelayed(new Runnable() {
+                  @Override
+                  public void run() {
+                      try {
+                          if (tab == null || tab.getWebContents() == null) return;
+                          tab.getWebContents().evaluateJavaScript(trustMin, null);
+                          tab.getWebContents().evaluateJavaScript(initJs, null);
+                      } catch (Exception ignore) {}
+                  }
+              }, 1500); // Delay in milliseconds (1000ms = 1 second)
+          } else {
+              try {
+                  if (tab == null || tab.getWebContents() == null) return;
+                  tab.getWebContents().evaluateJavaScript(trustMin, null);
+                  tab.getWebContents().evaluateJavaScript(initJs, null);
+              } catch (Exception ignore) {}
+          }
+
+          if (authorizedHost !=  null && authorizedHost.contains(tab.getUrl().getHost())) {
+            String address = "";
+            for (int i = 0; i != walletAddresses.size(); i++) {
+              WalletDataObj walletDataObj = walletAddresses.get(i);
+              if (chainId == 56 && walletDataObj.network.equals("smartchain")) {
+                address = walletDataObj.address;
+              }
+              if (chainId != 56 && walletDataObj.network.equals("ethereum")) {
+                address = walletDataObj.address;
+              }
+            }
+            String pendingWalletInteractionScript = "(function() {\n" +
+                            "window.ethereum.setAddress(\"" + address + "\"); \n" +
+                            "})();";
+
+            if (tab == null || tab.getWebContents() == null) return;
+            tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
+          }
+        } catch (Exception ignore) {}
+    }
+
     private String loadJs(int resource, Context context) {
-        InputStream inputStream = context.getResources().openRawResource(resource);
-        InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
-        BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+        if (context == null) return "";
+
         StringBuilder stringBuilder = new StringBuilder();
+        BufferedReader bufferedReader = null;
         String line;
         try {
+            InputStream inputStream = context.getResources().openRawResource(resource);
+            InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
+            bufferedReader = new BufferedReader(inputStreamReader);
+
             while ((line = bufferedReader.readLine()) != null) {
                 stringBuilder.append(line);
                 stringBuilder.append('\n'); // To retain line breaks
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             // Handle exception
         } finally {
             try {
-                bufferedReader.close();
+                if (bufferedReader != null) bufferedReader.close();
             } catch (IOException e) {
                 // Handle exception
             }
@@ -1279,7 +1321,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                 case REQUESTACCOUNTS:
                     if (pinCode.length() != 0) {
                         // show pin popup
-                        if (authorizedHost !=  null && authorizedHost.equals(mLocationBarModel.getTab().getUrl().getHost())) {
+                        if (authorizedHost !=  null && authorizedHost.contains(mLocationBarModel.getTab().getUrl().getHost())) {
                           String address = "";
                           for (int i = 0; i != walletAddresses.size(); i++) {
                             WalletDataObj walletDataObj = walletAddresses.get(i);
@@ -1291,6 +1333,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                                           "})();";
 
                           Tab tab = mLocationBarModel.getTab();
+                          if (tab == null || tab.getWebContents() == null) return;
                           tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
                         } else {
                           pendingWalletInteractionType = WalletInteractionEnum.WALLET_UNLOCK;
@@ -1308,8 +1351,8 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
                     if (pinCode.length() != 0) {
                         String chainIdHex = requestChainId;
-                        // todo get number after 0x
-                        if (authorizedHost !=  null && authorizedHost.equals(mLocationBarModel.getTab().getUrl().getHost())) {
+
+                        if (authorizedHost !=  null && authorizedHost.contains(mLocationBarModel.getTab().getUrl().getHost())) {
                           String address = "";
                           for (int i = 0; i != walletAddresses.size(); i++) {
                             WalletDataObj walletDataObj = walletAddresses.get(i);
@@ -1330,7 +1373,11 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
                           overrideChainId = extractedRequestChainId;
 
+                          String initJs = loadInitJs(overrideChainId, overrideChainId == 56 ? "https://bsc-dataseed2.binance.org" : "https://ethereum.publicnode.com");
+
                           Tab tab = mLocationBarModel.getTab();
+                          if (tab == null || tab.getWebContents() == null) return;
+                          tab.getWebContents().evaluateJavaScript(initJs, pendingWalletInteractionCallback);
                           tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
                         } else {
                           pendingWalletInteractionType = WalletInteractionEnum.WALLET_SWITCH_CHAIN;
@@ -1365,7 +1412,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                     if (pendingWalletInteractionPrice == null || (pendingWalletInteractionPrice != null && pendingWalletInteractionPrice.equals(""))) {
                         try {
                             int chainId = overrideChainId != -1 ? overrideChainId : 56;
-                            url = "https://" + (chainId == 56 ? "api.bscscan.com/api" : "api.etherscan.io/api") + "?module=proxy&action=eth_gasPrice&apikey=" + (chainId == 56 ? CryptoAPIHelper.BSCSCAN_API_KEY : CryptoAPIHelper.ETHERSCAN_API_KEY);
+                            url = "https://" + (chainId == 56 ? "api.bscscan.com/api" : "api.etherscan.io/api") + "?module=gastracker&action=gasoracle&apikey=" + (chainId == 56 ? CryptoAPIHelper.BSCSCAN_API_KEY : CryptoAPIHelper.ETHERSCAN_API_KEY);
 
                             isLoadingGas = true;
                             getGasPrice(url);
@@ -1456,7 +1503,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
         Tab tab = mLocationBarModel.getTab();
 
-        int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
+        int chainId = (authorizedHost !=  null && authorizedHost.contains(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
 
         mWalletInteractionDialog.show();
         mWalletInteractionDialog.setContentView(transactionConfirmationContainer);
@@ -1681,8 +1728,18 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
             protected void onPostExecute(String result) {
                 isLoadingGas = false;
                 try {
-                    JSONObject jsonResult = new JSONObject(result);
-                    pendingWalletInteractionPrice = jsonResult.getString("result");
+                    // everything I wrote handles a hex version of wei.. this api returns gwei -> convert to decimal -> hex string
+
+                    JSONObject jsonResult = new JSONObject(result).getJSONObject("result");
+                    String gasPrice = jsonResult.getString("ProposeGasPrice");
+
+                    BigInteger gasPriceBigInteger = new BigInteger(gasPrice);
+
+                    BigInteger wei = new BigInteger("1000000000");
+
+                    gasPriceBigInteger = gasPriceBigInteger.multiply(wei);
+
+                    pendingWalletInteractionPrice = gasPriceBigInteger.toString(16);
 
                     TextView positiveButton = transactionConfirmationContainer.findViewById(R.id.button_positive);
                     ProgressBar gasSpinner = transactionConfirmationContainer.findViewById(R.id.gas_value_loader);
@@ -1743,7 +1800,6 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
     }
 
     private void processRequest() {
-        //
         try {
            final SharedPreferences mSharedPreferences = new EncryptSharedPreferences(mActivity).getSharedPreferences();
            int attempts = mSharedPreferences.getInt("PIN_CODE_ATTEMPTS", 0);
@@ -1761,7 +1817,6 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                authorizedHost = mLocationBarModel.getTab().getUrl().getHost();
 
                mPinDialog.dismiss();
-
 
                String mnemonic = mSharedPreferences.getString("MNEMONIC_KEY", "");
                HDWallet mWallet = new HDWallet(mnemonic, "");
@@ -1792,6 +1847,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                                    "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + address + "\"]) \n" +
                                    "})();";
 
+                   if (tab == null || tab.getWebContents() == null) return;
                    tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
                } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SWITCH_CHAIN) {
                    overrideChainId = pendingWalletInteractionChainId;
@@ -1802,6 +1858,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
                                    "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + address + "\"]); \n" +
                                    "})();";
 
+                   if (tab == null || tab.getWebContents() == null) return;
                    tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
                } else if (pendingWalletInteractionType == WalletInteractionEnum.WALLET_SEND_TRX) {
                    int chainId = overrideChainId != -1 ? overrideChainId : 56;
@@ -1922,19 +1979,25 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         }
     }
 
+  //   private String keccak256(String inputHex) {
+  //     // Convert hex string to byte array
+  //     byte[] inputBytes = keccak256(inputHex);
+  //
+  //     // Create a Keccak-256 digest
+  //     KeccakDigest digest = new KeccakDigest(256);
+  //
+  //     // Perform the hashing
+  //     digest.update(inputBytes, 0, inputBytes.length);
+  //     byte[] outputBytes = new byte[digest.getDigestSize()];
+  //     digest.doFinal(outputBytes, 0);
+  //
+  //     // Convert the hash byte array back into a hex string
+  //     return "0x"+Hex.toHexString(outputBytes);
+  // }
+
     private byte[] keccak256(byte[] data) {
         Keccak.Digest256 digest = new Keccak.Digest256();
         return digest.digest(data);
-    }
-
-    public String encodeTransferData(String address, String amount) throws NoSuchAlgorithmException {
-        String functionSignature = "transfer(address,uint256)";
-        byte[] signatureHash = keccak256(functionSignature.getBytes(StandardCharsets.UTF_8));
-
-        String addressPadded = padLeft(address.replace("0x", ""), 64);
-        String amountPadded = padLeft(amount, 64);
-
-        return bytesToHex(signatureHash).substring(0, 8) + addressPadded + amountPadded;
     }
 
     public String padLeft(String s, int n) {
@@ -2047,18 +2110,12 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
                   JSONObject jsonResult = new JSONObject(result);
 
-                  // String pendingWalletInteractionScript = "(function() {\n" +
-                  //                 "window." + pendingWalletInteractionNetwork + ".sendResponse(" + pendingWalletInteractionId + ", [\"" + jsonResult.getString("result") + "\"]); \n" +
-                  //                 "})();";
-                  //
-                  // tab.getWebContents().evaluateJavaScript(pendingWalletInteractionScript, pendingWalletInteractionCallback);
-
                   openTrxConfirmation(jsonResult.getString("result"));
 
                   tab.reload();
 
                   // update nonce
-                  int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
+                  int chainId = (authorizedHost !=  null && authorizedHost.contains(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
                   final String ticker = chainId == 56 ? "BSC" : "ETH";
                   String nonce = TokenDatabase.getInstance(mActivity).getTokenNonce(ticker);
 
@@ -2109,6 +2166,15 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
         TextView errorText = container.findViewById(R.id.error_text);
         errorText.setText(result);
 
+        TextView negativeButton = container.findViewById(R.id.button_negative);
+        negativeButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                  mWalletInteractionDialog.dismiss();
+                  loadUrl("https://carbon.website/faq", v);
+                }
+            });
+
         TextView positiveButton = container.findViewById(R.id.button_positive);
         positiveButton.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -2135,7 +2201,7 @@ public class ToolbarManager implements UrlFocusChangeListener, ThemeColorObserve
 
         Tab tab = mLocationBarModel.getTab();
 
-        int chainId = (authorizedHost !=  null && authorizedHost.equals(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
+        int chainId = (authorizedHost !=  null && authorizedHost.contains(tab.getUrl().getHost()) && overrideChainId != -1) ? overrideChainId : 56;
 
         AlertDialog mWalletInteractionDialog = new AlertDialog.Builder(mActivity, R.style.WalletDialogAnimation).create();
         mWalletInteractionDialog.setCanceledOnTouchOutside(true);

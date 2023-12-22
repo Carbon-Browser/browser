@@ -245,6 +245,8 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
             // set text colour white if item was added by the user and ntp has a background
             if (mIsDarkEnabled) {
                 holder.textView.setTextColor(Color.WHITE);
+            } else {
+                holder.textView.setTextColor(Color.BLACK);
             }
 
             // set the background
@@ -424,7 +426,7 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
     }
 
     // set the tile titles text to white when a background is found - black by default
-    public void updateTileTextTint() {
+    public void updateTileTextTint(boolean isDark) {
         hasBackground = true;
 
         for (int childCount = mRecyclerView.getChildCount(), i = 0; i < childCount; ++i) {
@@ -432,16 +434,25 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
 
             // show delete buttons in edit mode, but hide add button
             if (!holder.isAddBtn) {
-                holder.textView.setTextColor(Color.WHITE);
-                holder.imageView.setColorFilter(Color.BLACK);
+                if (isDark) {
+                    holder.textView.setTextColor(Color.WHITE);
+                    holder.imageView.setColorFilter(Color.BLACK);
+                } else {
+                    holder.textView.setTextColor(Color.BLACK);
+                    holder.imageView.setColorFilter(Color.WHITE);
+                }
             } else {
-                holder.imageView.setColorFilter(Color.WHITE);
+                if (isDark) {
+                    holder.imageView.setColorFilter(Color.WHITE);
+                } else {
+                    holder.imageView.setColorFilter(Color.BLACK);
+                }
             }
         }
     }
 
-    public void setDark() {
-        mIsDarkEnabled = true;
+    public void setDark(boolean isDark) {
+        mIsDarkEnabled = isDark;
     }
 
     /**
