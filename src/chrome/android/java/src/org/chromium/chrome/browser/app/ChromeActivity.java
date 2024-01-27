@@ -2593,6 +2593,11 @@ public abstract class ChromeActivity<C extends ChromeActivityComponent>
             return true;
         }
 
+        // if (id == R.id.menu_download_video) {
+        //
+        //   return true;
+        // }
+
         if (id == R.id.join_telegram) {
           LoadUrlParams loadParams = new LoadUrlParams("https://t.me/trycarbonio");
           currentTab.loadUrl(loadParams);

@@ -1671,10 +1671,10 @@ if (!limit_android_deps) {
 
     # To remove visibility constraint, add this dependency to
     # //third_party/android_deps/build.gradle.
-    visibility = [
-      ":*",
-      "//third_party/androidx:*",
-    ]
+    #visibility = [
+    #  ":*",
+    #  "//third_party/androidx:*",
+    #]
     deps = [
       ":android_arch_core_common_java",
       ":android_arch_core_runtime_java",
@@ -1690,10 +1690,10 @@ if (!limit_android_deps) {
 
     # To remove visibility constraint, add this dependency to
     # //third_party/android_deps/build.gradle.
-    visibility = [
-      ":*",
-      "//third_party/androidx:*",
-    ]
+    #visibility = [
+    #  ":*",
+    #  "//third_party/androidx:*",
+    #]
     deps = [
       ":android_arch_core_common_java",
       ":android_arch_core_runtime_java",

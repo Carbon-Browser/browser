@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1E1E1E"
+    android:padding="12dp"
+    android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/editText_search"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:focusable="true"
+                    android:hint="Search here"/>
+
+                <View
+                    android:id="@+id/close"
+                    android:layout_marginStart="10dp"
+                    android:layout_width="35dp"
+                    android:layout_height="35dp"
+                    android:padding="8dp"
+                    android:background="@drawable/btn_close_white"/>
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_view"
+            android:layout_marginTop="15dp"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"/>
+
+        <ProgressBar
+            android:id="@+id/api_loader"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:progressBackgroundTint="#ff470a"
+            android:progressTint="#ff470a"
+            android:indeterminate="true"
+            android:layout_marginEnd="6dp"
+            android:layout_gravity="center"/>
+</LinearLayout>

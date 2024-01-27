@@ -22,6 +22,12 @@
         <item name="android:windowExitAnimation">@anim/speed_dial_exit</item>
     </style>
 
+    <style name="TokenSelectorStyle" parent="FullscreenDialogAnimation">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
     <style name="FullscreenDialogAnimation" parent="Theme.AppCompat.Light.Dialog">
         <item name="android:windowAnimationStyle">@style/FullscreenAnimation</item>
         <item name="android:backgroundDimEnabled">false</item>

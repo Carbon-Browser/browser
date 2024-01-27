@@ -699,12 +699,19 @@ android_library("chrome_java") {
     #"//chrome/android/third_party/trustwallet:trustwallet_proto_java",
     #"//third_party/android_deps:com_trustwallet_wallet_core_java",
 
+    #vdl
+    #"//chrome/android/third_party/vdl:commons_cli_java",
+    #"//third_party/android_deps:android_arch_lifecycle_viewmodel_java",
+    #"//third_party/android_deps:android_arch_lifecycle_livedata_core_java",
+
     # qr code
     "//chrome/android/third_party/zxing:zxing_java",
     "//chrome/android/third_party/qr:qr_java",
     "//chrome/android/third_party/qr:core_java",
 
     "//chrome/android/third_party/crypto:androidx_crypto_java",
+
+    #"//chrome/android/third_party/anychart:anychart_java",
 
     # amplitude
     "//chrome/android/third_party/amplitude:amplitude_java",

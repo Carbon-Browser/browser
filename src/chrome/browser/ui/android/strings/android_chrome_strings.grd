@@ -3475,6 +3475,9 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       <message name="IDS_MENU_DELETE_FROM_READING_LIST" desc="Menu item for removing the current page from the reading list. [CHAR_LIMIT=27]">
         Delete from reading list
       </message>
+      <message name="IDS_MENU_DOWNLOAD_VIDEO">
+        Download video
+      </message>
       <message name="IDS_MENU_FIND_IN_PAGE" desc="Menu item allowing users to find text within the current page. [CHAR_LIMIT=27]">
         Find in page
       </message>
@@ -5692,7 +5695,7 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         Rewards
       </message>
       <message name="IDS_FRE_MESSAGE_REWARDS" desc="">
-        We want to give back to our loyal users. Earn CSIX tokens that you can use to spend on our partner network, upgrade to our premium browser experience, Carbon Pro and use on our upcoming self-serve ad marketplace, Carbon AdX. The more you browse with Carbon, the more tokens you earn!
+        We want to give back to our loyal users. Earn points that you can use to spend on our partner network, upgrade to our premium browser experience, Carbon Pro and use on our upcoming self-serve ad marketplace, Carbon AdX. The more you browse with Carbon, the more tokens you earn!
       </message>
 
 
@@ -5715,8 +5718,17 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
       <message name="IDS_TOGGLE_NEWS" desc="">
         Toggle News
       </message>
+      <message name="IDS_TOGGLE_TOKEN_TRACKER" desc="">
+        Toggle token tracker
+      </message>
+      <message name="IDS_SELECT_TOKENS" desc="">
+        Select tokens
+      </message>
       <message name="IDS_TOGGLE_DAPPS" desc="">
         Toggle dApps
+      </message>
+      <message name="IDS_BECOME_FEATURED" desc="">
+        Become Featured
       </message>
       <message name="IDS_TOGGLE_SPEED_DIAL" desc="">
         Toggle Speed Dial
@@ -5762,7 +5774,7 @@ To change this setting, <ph name="BEGIN_LINK">&lt;resetlink&gt;</ph>reset sync<p
         Earn Rewards While You Browse
       </message>
       <message name="IDS_REWARD_ON_BOARDING_MESSAGE" desc="">
-        We want to give back to our loyal users. Earn CSIX tokens that you can use to spend on our partner network, upgrade to our premium browser experience, Carbon Pro and use on our upcoming self-serve ad marketplace, Carbon AdX. The more you browse with Carbon, the more tokens you earn!
+        We want to give back to our loyal users. Earn points that you can use to spend on our partner network, upgrade to our premium browser experience, Carbon Pro and use on our upcoming self-serve ad marketplace, Carbon AdX. The more you browse with Carbon, the more tokens you earn!
       </message>
 
       <message name="IDS_PREFS_SECTION_SUPPORT" desc="">

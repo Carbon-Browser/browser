@@ -134,6 +134,21 @@ import androidx.annotation.Nullable;
 import android.util.DisplayMetrics;
 import android.widget.RelativeLayout;
 
+import java.util.ArrayList;
+import java.util.List;
+import androidx.appcompat.widget.SearchView;
+import android.view.WindowManager;
+import android.view.Gravity;
+import android.view.Window;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import java.io.IOException;
+import android.widget.EditText;
+import java.net.SocketTimeoutException;
+import android.widget.ProgressBar;
+
+import java.text.DecimalFormat;
+
 /**
  * Layout for the new tab page. This positions the page elements in the correct vertical positions.
  * There are no separate phone and tablet UIs; this layout adapts based on the available space.
@@ -213,8 +228,11 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     private LinearLayout mMainLayoutTopSection;
     private TextView mPhotoCredit;
     private RecyclerView mNewsRecyclerView;
+    private LinearLayout mTokenTrackerContainer;
     private RewardsAPIBridge mRewardsBridge;
     private View mNoSearchLogoSpacer;
+
+    private AlertDialog mTokenDialog;
 
     /**
      * Vertical inset to add to the top and bottom of the search box bounds. May be 0 if no inset
@@ -227,6 +245,11 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
     private NewTabPageUma mNewTabPageUma;
 
     private boolean isDarkMode = true;
+
+    public enum TokenTrackerEnum {
+       CHART_DATA,
+       TOKEN_LIST
+    }
 
     /**
      * Constructor for inflating from XML.
@@ -397,6 +420,102 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
             }
         });
 
+        boolean isTokenTrackerEnabled = mPrefs.getBoolean("ntp_token_tracker_toggle", true);
+        mTokenTrackerContainer = findViewById(R.id.token_tracker_container);
+        if (isTokenTrackerEnabled) {
+            mTokenTrackerContainer.setVisibility(View.VISIBLE);
+
+            fetchTokenTrackerData();
+        }
+        Button buttonToggleTokenTracker = findViewById(R.id.overflow_button_token_tracker);
+        buttonToggleTokenTracker.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                PopupMenu popup = new PopupMenu(v.getContext(), buttonToggleTokenTracker);
+                popup.getMenuInflater().inflate(R.menu.menu_ntp_toggle_token_tracker, popup.getMenu());
+                popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                    public boolean onMenuItemClick(MenuItem item) {
+                        try {
+                            int id = item.getItemId();
+                            if (id == R.id.menu_ntp_toggle_token_tracker) {
+                                boolean isTokenTrackerEnabled = mPrefs.getBoolean("ntp_token_tracker_toggle", true);
+                                isTokenTrackerEnabled = !isTokenTrackerEnabled;
+                                mPrefs.edit().putBoolean("ntp_token_tracker_toggle", isTokenTrackerEnabled).apply();
+
+                                int visibility = isTokenTrackerEnabled ? View.VISIBLE : View.GONE;
+
+                                mTokenTrackerContainer.setVisibility(visibility);
+
+                                if (isTokenTrackerEnabled) {
+                                    mTokenTrackerContainer.setVisibility(View.VISIBLE);
+
+                                    fetchTokenTrackerData();
+                                }
+                            } else if (id == R.id.menu_ntp_select_tokens) {
+                                mTokenDialog = new AlertDialog.Builder(v.getContext(), R.style.TokenSelectorStyle).create();
+                                mTokenDialog.setCanceledOnTouchOutside(true);
+
+                                View container = mActivity.getLayoutInflater().inflate(R.layout.token_selector_layout, null);
+
+                                mTokenDialog.show();
+                                mTokenDialog.setContentView(container);
+
+                                int msSinceUpdate = Long.valueOf(System.currentTimeMillis()).intValue() - mPrefs.getInt("ntp_token_list_last_update", 0);
+                                // cache, refresh after 1 day
+                                if (msSinceUpdate <= 86400000) {
+                                    String json = mPrefs.getString("cached_token_list", null);
+                                    if (json != null && !json.equals("") && !json.trim().isEmpty()) {
+                                        processTokenListData(json);
+                                    } else {
+                                        getTokenTrackerInfo("https://api.coingecko.com/api/v3/coins/list", TokenTrackerEnum.TOKEN_LIST);
+                                    }
+                                } else {
+                                    getTokenTrackerInfo("https://api.coingecko.com/api/v3/coins/list", TokenTrackerEnum.TOKEN_LIST);
+                                }
+
+                                mTokenDialog.getWindow().clearFlags(
+                                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                                            android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+
+                                // Set the dismiss listener
+                                mTokenDialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+                                    @Override
+                                    public void onDismiss(DialogInterface dialogInterface) {
+                                        mTokenDialog = null;
+                                    }
+                                });
+
+                                // Set the cancel listener
+                                mTokenDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
+                                    @Override
+                                    public void onCancel(DialogInterface dialogInterface) {
+                                        mTokenDialog = null;
+                                    }
+                                });
+
+                                // View mDismissButton = container.findViewById(R.id.wallet_back_button);
+                                // mDismissButton.setOnClickListener(new View.OnClickListener() {
+                                //         @Override
+                                //         public void onClick(View v) {
+                                //             mTokenDialog.dismiss();
+                                //         }
+                                //     });
+
+                                // mTokenDialog.getWindow().setGravity(Gravity.BOTTOM);
+
+                                // Set the attributes to match parent width
+                                mTokenDialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+                                container.setMinimumHeight(v.getResources().getDimensionPixelSize(R.dimen.min_popup_dialog_height));
+                            }
+                        } catch (Exception ignore) {}
+                        return true;
+                    }
+                });
+                popup.show();
+            }
+        });
+
+
         mNewsRecyclerView = findViewById(R.id.ntp_news_recyclerview);
         boolean isNewsEnabled = mPrefs.getBoolean("ntp_news_toggle", true);
         if (isNewsEnabled)
@@ -411,27 +530,32 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
                 popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
                     public boolean onMenuItemClick(MenuItem item) {
                         try {
-                            boolean isDappsEnabled = mPrefs.getBoolean("ntp_dapps_toggle", true);
-                            isDappsEnabled = !isDappsEnabled;
-                            mPrefs.edit().putBoolean("ntp_dapps_toggle", isDappsEnabled).apply();
-                            LinearLayout mDappsLinearLayout1 = findViewById(R.id.featured_dapps_linearlayout_inner1);
-                            LinearLayout mDappsLinearLayout2 = findViewById(R.id.featured_dapps_linearlayout_inner2);
-                            View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
-
-                            int visibility = isDappsEnabled ? View.VISIBLE : View.GONE;
-
-                            mDappsLinearLayout1.setVisibility(visibility);
-                            mDappsLinearLayout2.setVisibility(visibility);
-                            mViewMoreDappsBtn.setVisibility(visibility);
-
-                            if (mSpeedDialView == null) return true;
-
-                            if (!isDappsEnabled) {
-                                mSpeedDialView.setDark(true);
-                                mSpeedDialView.updateTileTextTint(true);
+                            int id = item.getItemId();
+                            if (id == R.id.menu_ntp_become_featured) {
+                                loadUrl("https://carbon.website/adx/");
                             } else {
-                                mSpeedDialView.setDark(isDarkMode);
-                                mSpeedDialView.updateTileTextTint(isDarkMode);
+                                boolean isDappsEnabled = mPrefs.getBoolean("ntp_dapps_toggle", true);
+                                isDappsEnabled = !isDappsEnabled;
+                                mPrefs.edit().putBoolean("ntp_dapps_toggle", isDappsEnabled).apply();
+                                LinearLayout mDappsLinearLayout1 = findViewById(R.id.featured_dapps_linearlayout_inner1);
+                                LinearLayout mDappsLinearLayout2 = findViewById(R.id.featured_dapps_linearlayout_inner2);
+                                View mViewMoreDappsBtn = findViewById(R.id.view_more_dapps_btn);
+
+                                int visibility = isDappsEnabled ? View.VISIBLE : View.GONE;
+
+                                mDappsLinearLayout1.setVisibility(visibility);
+                                mDappsLinearLayout2.setVisibility(visibility);
+                                mViewMoreDappsBtn.setVisibility(visibility);
+
+                                if (mSpeedDialView == null) return true;
+
+                                if (!isDappsEnabled) {
+                                    mSpeedDialView.setDark(true);
+                                    mSpeedDialView.updateTileTextTint(true);
+                                } else {
+                                    mSpeedDialView.setDark(isDarkMode);
+                                    mSpeedDialView.updateTileTextTint(isDarkMode);
+                                }
                             }
                         } catch (Exception ignore) {}
                         return true;
@@ -542,6 +666,313 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
         }
 
         initialiseWeb3Features();
+
+        fetchTokenTrackerData();
+    }
+
+    private void fetchTokenTrackerData() {
+        try {
+            final SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+            boolean isTokenTrackerEnabled = mPrefs.getBoolean("ntp_token_tracker_toggle", true);
+            if (!isTokenTrackerEnabled) return;
+
+            String sharedPrefKey = "ntp_token_tracker_data";
+            String cachedData = mPrefs.getString(sharedPrefKey, null);
+
+            int msSinceUpdate = Long.valueOf(System.currentTimeMillis()).intValue() - mPrefs.getInt("ntp_token_tracker_last_update", 0);
+            // cache, refresh after 1 day
+            if (msSinceUpdate <= 3600000 && cachedData != null && !cachedData.equals("") && !cachedData.trim().isEmpty()) {
+                processTokenTrackerData(cachedData);
+            } else {
+              String[] defaultValues = {"bitcoin,BTC,https://assets.coingecko.com/coins/images/1/large/bitcoin.png?1696501400", "ethereum,ETH,https://assets.coingecko.com/coins/images/279/large/ethereum.png?1696501628", "carbon-browser,CSIX,https://assets.coingecko.com/coins/images/28905/large/csix.png?1696527881"};
+              TokenTrackerObj[] tokenTrackerObjects = new TokenTrackerObj[defaultValues.length];
+
+              for (int i = 0; i < defaultValues.length; i++) {
+                  String sharedPrefKeyPos = "ntp_token_tracker_pos" + i;
+                  String pos = mPrefs.getString(sharedPrefKeyPos, defaultValues[i]);
+                  String[] posValues = pos.split(",");
+                  tokenTrackerObjects[i] = new TokenTrackerObj(posValues[0], "", posValues[1], i);
+              }
+
+              getTokenTrackerInfo("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=" + tokenTrackerObjects[0].id + "%2C" + tokenTrackerObjects[1].id + "%2C" + tokenTrackerObjects[2].id + "&order=market_cap_desc&per_page=100&page=1&sparkline=false&locale=en", TokenTrackerEnum.CHART_DATA);
+            }
+        } catch (Exception ignore) {
+
+        }
+    }
+
+    private void processTokenTrackerData(String result) {
+        final SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+
+        String[] defaultValues = {"bitcoin,BTC,https://assets.coingecko.com/coins/images/1/large/bitcoin.png?1696501400", "ethereum,ETH,https://assets.coingecko.com/coins/images/279/large/ethereum.png?1696501628", "carbon-browser,CSIX,https://assets.coingecko.com/coins/images/28905/large/csix.png?1696527881"};
+        TokenTrackerObj[] tokenTrackerObjects = new TokenTrackerObj[defaultValues.length];
+
+        try {
+            for (int i = 0; i < defaultValues.length; i++) {
+                String sharedPrefKey = "ntp_token_tracker_pos" + i;
+                String pos = mPrefs.getString(sharedPrefKey, defaultValues[i]);
+                String[] posValues = pos.split(",");
+                tokenTrackerObjects[i] = new TokenTrackerObj(posValues[0], "", posValues[1], i);
+            }
+        } catch (Exception e) {
+            // Handle the exception or log it
+        }
+
+        try {
+            JSONArray jsonArray = new JSONArray(result);
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObj = jsonArray.getJSONObject(i);
+                String id = jsonObj.getString("id");
+                for (TokenTrackerObj token : tokenTrackerObjects) {
+                    if (id.equals(token.id)) {
+                        final String externalUrl = "https://www.coingecko.com/en/coins/" + id;
+
+                        final ImageView logo;
+                        TextView priceTextView = null;
+                        TextView capTextView = null;
+                        TextView tickerTextView = null;
+                        LinearLayout tokenLayout = null;
+                        if (token.position == 0) {
+                            tokenLayout = mTokenTrackerContainer.findViewById(R.id.token_traker_1);
+                            priceTextView = (TextView) tokenLayout.findViewById(R.id.token_price);
+                            capTextView = (TextView) tokenLayout.findViewById(R.id.token_cap);
+                            tickerTextView = (TextView) tokenLayout.findViewById(R.id.token_ticker);
+                            logo = tokenLayout.findViewById(R.id.logo);
+                        } else if (token.position == 1) {
+                            tokenLayout = mTokenTrackerContainer.findViewById(R.id.token_traker_2);
+                            priceTextView = (TextView) tokenLayout.findViewById(R.id.token_price);
+                            capTextView = (TextView) tokenLayout.findViewById(R.id.token_cap);
+                            tickerTextView = (TextView) tokenLayout.findViewById(R.id.token_ticker);
+                            logo = tokenLayout.findViewById(R.id.logo);
+                        } else {
+                            tokenLayout = mTokenTrackerContainer.findViewById(R.id.token_traker_3);
+                            priceTextView = (TextView) tokenLayout.findViewById(R.id.token_price);
+                            capTextView = (TextView) tokenLayout.findViewById(R.id.token_cap);
+                            tickerTextView = (TextView) tokenLayout.findViewById(R.id.token_ticker);
+                            logo = tokenLayout.findViewById(R.id.logo);
+                        }
+
+                        tokenLayout.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View view) {
+                                loadUrl(externalUrl);
+                            }
+                        });
+
+                        Glide.with(logo)
+                            .load(jsonObj.getString("image"))
+                            .thumbnail(0.1f)
+                            .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                            .into(new CustomTarget<Drawable>() {
+                                @Override
+                                public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                                    logo.setImageDrawable(resource);
+                                }
+
+                                @Override
+                                public void onLoadCleared(@Nullable Drawable placeholder) {
+
+                                }
+                            });
+
+                        tickerTextView.setText(token.symbol + "/USDT");
+
+                        DecimalFormat dfPrice = new DecimalFormat("#.###");
+                        priceTextView.setText("$"+dfPrice.format(jsonObj.getDouble("current_price")));
+
+                        double priceChange = jsonObj.getDouble("price_change_24h");
+                        DecimalFormat df = new DecimalFormat("#.#");
+                        int chartColor = Color.parseColor("#74d875");
+                        String capString = df.format(jsonObj.getDouble("price_change_percentage_24h")) + "%";
+                        if (priceChange < 0) {
+                            int color = Color.parseColor("#b85550");
+                            capTextView.setTextColor(color);
+                            capString = capString;
+                        } else {
+                            capString = "+" + capString;
+                        }
+                        capTextView.setText(capString);
+                        break; // breaks the inner loop as the condition is met
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+
+        }
+    }
+
+    private void processTokenListData(String result) {
+        try {
+            JSONArray jsonArray = new JSONArray(result);
+
+            List<TokenTrackerObj> tokenList = new ArrayList<>();
+
+            for (int i = 0; i < jsonArray.length(); i++) {
+                JSONObject jsonObject = jsonArray.getJSONObject(i);
+
+                String id = jsonObject.getString("id");
+                String symbol = jsonObject.getString("symbol");
+                String name = jsonObject.getString("name");
+
+                TokenTrackerObj token = new TokenTrackerObj(id, name, symbol, i);
+                tokenList.add(token);
+            }
+
+            EditText editTextSearch = mTokenDialog.findViewById(R.id.editText_search);
+
+            RecyclerView recyclerView = mTokenDialog.findViewById(R.id.recycler_view);
+            recyclerView.setLayoutManager(new LinearLayoutManager(mTokenDialog.getContext()));
+
+            ProgressBar spinner = mTokenDialog.findViewById(R.id.api_loader);
+
+            recyclerView.setVisibility(View.VISIBLE);
+            spinner.setVisibility(View.GONE);
+
+            View closeButton = mTokenDialog.findViewById(R.id.close);
+            closeButton.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    if (mTokenDialog != null) mTokenDialog.dismiss();
+                }
+            });
+
+            TokenTrackerAdapter adapter = new TokenTrackerAdapter(tokenList, new TokenTrackerAdapter.OnItemClickListener() {
+                @Override
+                public void onItemClick(final int position, final String info) {
+                    // Handle the click event here
+                    try {
+                        final AlertDialog secondDialogBuilder = new AlertDialog.Builder(mActivity).create();
+
+                        View container = mActivity.getLayoutInflater().inflate(R.layout.token_tracker_selector_layout, null);
+
+                        View position1View = container.findViewById(R.id.item_position_1);
+                        View position2View = container.findViewById(R.id.item_position_2);
+                        View position3View = container.findViewById(R.id.item_position_3);
+
+                        View.OnClickListener onClickListener = new View.OnClickListener() {
+                            @Override
+                            public void onClick(View view) {
+                                try {
+                                    final SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+
+                                    Toast.makeText(view.getContext(), "Tracking new token", Toast.LENGTH_SHORT).show();
+
+                                    int pos = Integer.parseInt((String)view.getTag());
+
+                                    mPrefs.edit().putInt("ntp_token_tracker_last_update", 0).apply();
+
+                                    String sharedPrefKey = "ntp_token_tracker_pos" + pos;
+                                    mPrefs.edit().putString(sharedPrefKey, info).apply();
+
+                                    fetchTokenTrackerData();
+
+                                    secondDialogBuilder.dismiss();
+                                    secondDialogBuilder.cancel();
+
+                                    mTokenDialog.dismiss();
+                                    mTokenDialog = null;
+                                } catch (Exception ignore) {}
+                            }
+                        };
+
+                        secondDialogBuilder.show();
+
+                        secondDialogBuilder.setContentView(container);
+
+                        position1View.setOnClickListener(onClickListener);
+                        position2View.setOnClickListener(onClickListener);
+                        position3View.setOnClickListener(onClickListener);
+                    } catch (Exception ignore) {}
+                }
+            });
+            recyclerView.setAdapter(adapter);
+
+            editTextSearch.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                    // Before text changed
+                }
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    // As the user types, filter the list or perform the search
+                    adapter.getFilter().filter(s);
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {
+                    // After text changed
+                }
+            });
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void getTokenTrackerInfo(String url, TokenTrackerEnum type) {
+        new AsyncTask<String>() {
+            @Override
+            protected String doInBackground() {
+                HttpURLConnection conn = null;
+                StringBuffer response = new StringBuffer();
+                try {
+                    URL mUrl = new URL(url);
+
+                    conn = (HttpURLConnection) mUrl.openConnection();
+                    conn.setDoOutput(false);
+                    conn.setConnectTimeout(20000);
+                    conn.setDoInput(true);
+                    conn.setUseCaches(false);
+                    conn.setRequestMethod("GET");
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+
+                    // handle the response
+                    int status = conn.getResponseCode();
+                    if (status != 200) {
+                        throw new IOException("Post failed with error code " + status);
+                    } else {
+                        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        String inputLine;
+                        while ((inputLine = in.readLine()) != null) {
+                            response.append(inputLine);
+                        }
+                        in.close();
+                    }
+                } catch (SocketTimeoutException timeout) {
+                    // Time out, don't set a background - lazy
+                } catch (Exception e) {
+
+                } finally {
+                    if (conn != null) conn.disconnect();
+                }
+
+                return response.toString();
+            }
+
+            @Override
+            protected void onPostExecute(String result) {
+                final SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+                if (type == TokenTrackerEnum.CHART_DATA) {
+                    mPrefs.edit().putString("ntp_token_tracker_data", result).apply();
+                    mPrefs.edit().putInt("ntp_token_tracker_last_update", Long.valueOf(System.currentTimeMillis()).intValue()).apply();
+                    processTokenTrackerData(result);
+                } else if (type == TokenTrackerEnum.TOKEN_LIST) {
+                    mPrefs.edit().putInt("ntp_token_list_last_update", Long.valueOf(System.currentTimeMillis()).intValue()).apply();
+                    mPrefs.edit().putString("cached_token_list", result).apply();
+                    processTokenListData(result);
+                }
+            }
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+
+    private String formatNumber(long number) {
+        if (number >= 1_000_000_000) {
+            return String.format("%.1fb", number / 1_000_000_000.0);
+        } else if (number >= 1_000_000) {
+            return String.format("%.1fm", number / 1_000_000.0);
+        } else {
+            return String.valueOf(number);
+        }
     }
 
     private boolean isCarbonDefault() {
@@ -1562,6 +1993,10 @@ public class NewTabPageLayout extends LinearLayout implements VrModeObserver, Ba
 
         if (mSearchProviderLogoView != null) {
             mSearchProviderLogoView.destroy();
+        }
+
+        if (mTokenDialog != null) {
+            mTokenDialog = null;
         }
 
         if (mLogoDelegate != null) {

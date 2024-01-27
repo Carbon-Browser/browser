@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/menu_ntp_toggle_token_tracker" android:title="@string/toggle_token_tracker"/>
+    <item android:id="@+id/menu_ntp_select_tokens" android:title="@string/select_tokens"/>
+</menu>

@@ -790,6 +790,8 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/ntp/NewTabPage.java",
   "java/src/org/chromium/chrome/browser/ntp/NewTabPageLaunchOrigin.java",
   "java/src/org/chromium/chrome/browser/ntp/NewTabPageLayout.java",
+  "java/src/org/chromium/chrome/browser/ntp/TokenTrackerObj.java",
+  "java/src/org/chromium/chrome/browser/ntp/TokenTrackerAdapter.java",
   "java/src/org/chromium/chrome/browser/ntp/BackgroundController.java",
   "java/src/org/chromium/chrome/browser/ntp/news/NTPNewsRecyclerAdapter.java",
   "java/src/org/chromium/chrome/browser/ntp/news/NewsDataObject.java",
@@ -995,6 +997,14 @@ chrome_java_sources = [
   #"java/src/org/chromium/chrome/browser/rewards/RewardObject.java",
   "java/src/org/chromium/chrome/browser/rewards/RewardsRecyclerAdapter.java",
   "java/src/org/chromium/chrome/browser/rewards/RewardsRedeemActivity.java",
+
+  #"java/src/org/chromium/chrome/browser/vdl/crypto/Crypto.java",
+  #"java/src/org/chromium/chrome/browser/vdl/crypto/CryptoException.java",
+  #"java/src/org/chromium/chrome/browser/vdl/crypto/Main.java",
+  #"java/src/org/chromium/chrome/browser/vdl/crypto/PlaylistDownloader.java",
+  #"java/src/org/chromium/chrome/browser/vdl/utils/HLSUtils.java",
+  #"java/src/org/chromium/chrome/browser/vdl/VDLViewModel.java",
+
   "java/src/org/chromium/chrome/browser/wallet/WalletActivity.java",
   "java/src/org/chromium/chrome/browser/wallet/dapp/DAppMethod.java",
   "java/src/org/chromium/chrome/browser/wallet/dapp/Numeric.java",

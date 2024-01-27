@@ -562,10 +562,63 @@
                   android:layout_gravity="center" />
             </LinearLayout>
 
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/token_tracker_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:text="TOKEN TRACKER"
+                    android:layout_gravity="center" />
+
+                <Button
+                    android:id="@+id/overflow_button_token_tracker"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="top|end"
+                    android:background="@drawable/ic_overflow" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:id="@+id/token_tracker_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:gravity="center"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <include
+                    layout="@layout/token_tracker_widget"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:id="@+id/token_traker_1"/>
+
+                <include
+                    layout="@layout/token_tracker_widget"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:id="@+id/token_traker_2"/>
+
+                <include
+                    layout="@layout/token_tracker_widget"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:id="@+id/token_traker_3"/>
+
+            </LinearLayout>
+
             <LinearLayout
                 android:id="@+id/speed_dial_container"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="30dp"
                 android:orientation="vertical">
 
                 <FrameLayout

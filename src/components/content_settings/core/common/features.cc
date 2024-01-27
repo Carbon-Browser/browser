@@ -20,7 +20,7 @@ const base::Feature kImprovedCookieControls{"ImprovedCookieControls",
 const base::Feature kDarkenWebsitesCheckboxInThemesSetting{
     "DarkenWebsitesCheckboxInThemesSetting", base::FEATURE_ENABLED_BY_DEFAULT};
 constexpr base::FeatureParam<bool> kDarkenWebsitesCheckboxOptOut{
-    &kDarkenWebsitesCheckboxInThemesSetting, "opt_out", false};
+    &kDarkenWebsitesCheckboxInThemesSetting, "opt_out", true};
 #endif  // BUILDFLAG(IS_ANDROID)
 
 }  // namespace content_settings
